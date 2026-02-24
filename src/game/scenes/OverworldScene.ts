@@ -46,6 +46,7 @@ export class OverworldScene extends Phaser.Scene {
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
     this.player.setOrigin(0.5, 1)
     this.player.setScale(WORLD_SCALE)
+    this.player.setDepth(10)
     this.player.setCollideWorldBounds(true)
 
     if (blockedLayer) {
