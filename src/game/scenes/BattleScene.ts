@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/useGameStore'
 
 export class BattleScene extends Phaser.Scene {
   private unsub?: () => void
+  private endTimer?: Phaser.Time.TimerEvent
 
   constructor() {
     super('battle')
@@ -26,20 +27,41 @@ export class BattleScene extends Phaser.Scene {
     })
 
     const sync = () => {
-      const battle = useGameStore.getState().battle
+      const state = useGameStore.getState()
+      const battle = state.battle
       if (!battle.active) {
         this.scene.start('overworld')
         return
       }
+
       messageText.setText(battle.message)
+
+      const ended = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
+      if (ended && !this.endTimer) {
+        this.endTimer = this.time.delayedCall(700, () => {
+          useGameStore.getState().endBattle()
+          this.endTimer = undefined
+        })
+      }
+
+      if (!ended && this.endTimer) {
+        this.endTimer.remove(false)
+        this.endTimer = undefined
+      }
     }
 
     sync()
     this.unsub = useGameStore.subscribe(sync)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.shutdown()
+    })
   }
 
   shutdown() {
     this.unsub?.()
     this.unsub = undefined
+    this.endTimer?.remove(false)
+    this.endTimer = undefined
   }
 }
