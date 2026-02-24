@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import type Phaser from 'phaser'
 import { createGame } from './game/createGame'
 import { ko } from './i18n/ko'
 import { useGameStore } from './store/useGameStore'
 
+type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | null
+
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
+  const [activeModal, setActiveModal] = useState<ModalType>(null)
   const sceneReady = useGameStore((state) => state.sceneReady)
   const playerTile = useGameStore((state) => state.playerTile)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
@@ -44,6 +48,9 @@ function App() {
     return ko.app.encounterAt(lastEncounter.x, lastEncounter.y)
   }, [lastEncounter])
 
+  const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
+  const closeModal = () => setActiveModal(null)
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
       <h1 className="text-2xl md:text-3xl font-bold">{ko.app.title}</h1>
@@ -72,14 +79,12 @@ function App() {
           <h2 className="font-semibold">{ko.app.townServices}</h2>
           <p className="text-sm text-emerald-300">₽ {money} · Potions {potions}</p>
           <p className="text-xs text-slate-400">{ko.app.serviceHint}</p>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <button className="bg-sky-700 p-2 rounded" onClick={buyPotion}>{ko.app.buyPotion}</button>
-            <button className="bg-teal-700 p-2 rounded" onClick={healPartyAtPc}>{ko.app.pcHeal}</button>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button className="bg-slate-700 p-2 rounded" onClick={saveGame}>{ko.app.save}</button>
-            <button className="bg-slate-700 p-2 rounded" onClick={loadGame}>{ko.app.load}</button>
-          </div>
+          <button
+            className="w-full bg-violet-700 active:bg-violet-600 p-3 rounded text-sm font-semibold"
+            onClick={() => openModal('menu')}
+          >
+            {ko.app.menu.open}
+          </button>
         </div>
       </section>
 
@@ -96,6 +101,99 @@ function App() {
           <DirectionButton direction="right" label="→" onInput={setVirtualInput} />
         </div>
       </section>
+
+      <BaseModal open={activeModal === 'menu'} onClose={closeModal} title={ko.app.menu.title}>
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
+          <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
+          <MenuAction label={ko.app.menu.shop} onClick={() => openModal('shop')} />
+          <MenuAction label={ko.app.menu.pc} onClick={() => openModal('pc')} />
+          <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'party'} onClose={closeModal} title={ko.app.modal.partyTitle}>
+        <div className="space-y-2 text-sm">
+          {party.map((monster) => (
+            <div key={monster.id} className="rounded border border-slate-700 p-2 bg-slate-800/70">
+              <p className="font-semibold">{monster.name} · Lv.{monster.level}</p>
+              <p className="text-slate-300">{ko.app.modal.hp(monster.hp, monster.maxHp)} · EXP {monster.exp}/{monster.nextLevelExp}</p>
+            </div>
+          ))}
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'inventory'} onClose={closeModal} title={ko.app.modal.inventoryTitle}>
+        <div className="text-sm space-y-2">
+          <p className="text-emerald-300">{ko.app.modal.money(money)}</p>
+          {potions > 0 ? (
+            <div className="rounded border border-slate-700 p-2 bg-slate-800/70 flex items-center justify-between">
+              <span>포션</span>
+              <span>{ko.app.modal.potions(potions)}</span>
+            </div>
+          ) : (
+            <p className="text-slate-400">{ko.app.modal.inventoryEmpty}</p>
+          )}
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'shop'} onClose={closeModal} title={ko.app.modal.shopTitle}>
+        <div className="space-y-3 text-sm">
+          <p className="text-emerald-300">{ko.app.modal.money(money)}</p>
+          <button
+            className="w-full rounded bg-sky-700 active:bg-sky-600 p-3 font-semibold disabled:opacity-50"
+            onClick={buyPotion}
+            disabled={money < 20}
+          >
+            {ko.app.modal.buyPotion}
+          </button>
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'pc'} onClose={closeModal} title={ko.app.modal.pcTitle}>
+        <div className="space-y-2 text-sm">
+          <button
+            className="w-full rounded bg-teal-700 active:bg-teal-600 p-3 font-semibold"
+            onClick={healPartyAtPc}
+          >
+            {ko.app.modal.healParty}
+          </button>
+          <button
+            className="w-full rounded bg-indigo-700 active:bg-indigo-600 p-3 font-semibold"
+            onClick={() => openModal('party')}
+          >
+            {ko.app.modal.viewParty}
+          </button>
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'save'} onClose={closeModal} title={ko.app.modal.saveTitle}>
+        <div className="space-y-3 text-sm">
+          <p className="text-slate-300">{ko.app.modal.saveDesc}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="rounded bg-slate-700 active:bg-slate-600 p-3" onClick={() => openModal('save-confirm')}>
+              {ko.app.modal.saveNow}
+            </button>
+            <button className="rounded bg-slate-700 active:bg-slate-600 p-3" onClick={loadGame}>
+              {ko.app.modal.loadNow}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'save-confirm'} onClose={() => openModal('save')} title={ko.app.modal.confirmSaveTitle}>
+        <div className="space-y-3 text-sm">
+          <p className="text-slate-300">{ko.app.modal.confirmSaveDesc}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="rounded bg-emerald-700 active:bg-emerald-600 p-3" onClick={() => { saveGame(); closeModal() }}>
+              {ko.app.modal.confirm}
+            </button>
+            <button className="rounded bg-slate-700 active:bg-slate-600 p-3" onClick={() => openModal('save')}>
+              {ko.app.modal.cancel}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
 
       {battle.active && (
         <section className="fixed md:static bottom-3 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-[calc(100%-1.5rem)] md:w-full max-w-sm md:max-w-5xl bg-slate-900/95 border border-slate-700 rounded p-4 space-y-3 shadow-2xl">
@@ -120,6 +218,44 @@ function App() {
         </section>
       )}
     </main>
+  )
+}
+
+type BaseModalProps = {
+  open: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+}
+
+function BaseModal({ open, onClose, title, children }: BaseModalProps) {
+  return (
+    <Dialog open={open} onClose={onClose} className="relative z-[70]">
+      <DialogBackdrop className="fixed inset-0 bg-black/60" />
+      <div className="fixed inset-0 flex items-end md:items-center justify-center p-2 md:p-4">
+        <DialogPanel className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+          <div className="flex items-center justify-between mb-3">
+            <DialogTitle className="font-semibold">{title}</DialogTitle>
+            <button className="text-xs px-2 py-1 rounded bg-slate-700" onClick={onClose}>{ko.app.menu.close}</button>
+          </div>
+          {children}
+        </DialogPanel>
+      </div>
+    </Dialog>
+  )
+}
+
+type MenuActionProps = {
+  label: string
+  onClick: () => void
+  className?: string
+}
+
+function MenuAction({ label, onClick, className }: MenuActionProps) {
+  return (
+    <button className={`rounded bg-violet-700 active:bg-violet-600 p-3 font-semibold ${className ?? ''}`} onClick={onClick}>
+      {label}
+    </button>
   )
 }
 
