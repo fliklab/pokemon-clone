@@ -1,5 +1,5 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type Phaser from 'phaser'
 import { createGame } from './game/createGame'
 import { ko } from './i18n/ko'
@@ -9,17 +9,14 @@ type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save
 
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
+  const gameCanvasContainerRef = useRef<HTMLDivElement | null>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
-  const sceneReady = useGameStore((state) => state.sceneReady)
-  const playerTile = useGameStore((state) => state.playerTile)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
   const battle = useGameStore((state) => state.battle)
   const nearbyNpc = useGameStore((state) => state.nearbyNpc)
   const interactionNonce = useGameStore((state) => state.interactionNonce)
   const party = useGameStore((state) => state.party)
-  const badges = useGameStore((state) => state.badges)
-  const defeatedTrainers = useGameStore((state) => state.defeatedTrainers)
   const money = useGameStore((state) => state.money)
   const potions = useGameStore((state) => state.potions)
   const setSceneReady = useGameStore((state) => state.setSceneReady)
@@ -32,17 +29,26 @@ function App() {
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
   const requestNpcInteract = useGameStore((state) => state.requestNpcInteract)
 
+  const focusGameCanvas = useCallback(() => {
+    gameCanvasContainerRef.current?.focus()
+  }, [])
+
   useEffect(() => {
     if (!gameRef.current) {
       gameRef.current = createGame('game-root', () => setSceneReady(true))
     }
 
+    const frame = window.requestAnimationFrame(() => {
+      focusGameCanvas()
+    })
+
     return () => {
+      window.cancelAnimationFrame(frame)
       gameRef.current?.destroy(true)
       gameRef.current = null
       setSceneReady(false)
     }
-  }, [setSceneReady])
+  }, [focusGameCanvas, setSceneReady])
 
   const encounterText = useMemo(() => {
     if (!lastEncounter) {
@@ -53,7 +59,12 @@ function App() {
   }, [lastEncounter])
 
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
-  const closeModal = () => setActiveModal(null)
+  const closeModal = () => {
+    setActiveModal(null)
+    window.requestAnimationFrame(() => {
+      focusGameCanvas()
+    })
+  }
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
   const canOpenShop = nearbyNpc === 'shop'
@@ -81,42 +92,27 @@ function App() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
-      <h1 className="text-2xl md:text-3xl font-bold">{ko.app.title}</h1>
-      <p className="text-slate-300 text-sm md:text-base">{ko.app.sceneReady}: {sceneReady ? ko.app.ready : ko.app.loading}</p>
-      <p className="text-slate-300 text-sm md:text-base">{ko.app.playerTile}: ({playerTile.x}, {playerTile.y})</p>
+      <div className="w-full max-w-5xl flex items-center justify-between">
+        <h1 className="text-xl md:text-2xl font-bold">{ko.app.title}</h1>
+        <button
+          className="h-10 w-10 rounded-full bg-slate-800 border border-slate-600 text-xl leading-none hover:bg-slate-700 active:bg-slate-700"
+          onClick={() => openModal('menu')}
+          aria-label="설정 메뉴 열기"
+        >
+          ⚙
+        </button>
+      </div>
+
       <p className="text-emerald-300 text-sm md:text-base">{encounterText}</p>
 
-      <section className="w-full max-w-5xl grid md:grid-cols-3 gap-3">
-        <div className="rounded border border-slate-700 p-3 bg-slate-900/70">
-          <h2 className="font-semibold mb-2">{ko.app.party}</h2>
-          {party.map((monster) => (
-            <div key={monster.id} className="text-sm flex justify-between border-b border-slate-800 py-1">
-              <span>{monster.name} Lv.{monster.level}</span>
-              <span>EXP {monster.exp}/{monster.nextLevelExp}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded border border-slate-700 p-3 bg-slate-900/70">
-          <h2 className="font-semibold mb-2">{ko.app.gymTrainers}</h2>
-          <p className="text-sm text-slate-300">{ko.app.defeated}: {defeatedTrainers.length}/3</p>
-          <p className="text-sm text-amber-300">{ko.app.badges}: {badges.length > 0 ? badges.join(', ') : ko.app.noneYet}</p>
-        </div>
-
-        <div className="rounded border border-slate-700 p-3 bg-slate-900/70 space-y-2">
-          <h2 className="font-semibold">{ko.app.townServices}</h2>
-          <p className="text-sm text-emerald-300">₽ {money} · Potions {potions}</p>
-          <p className="text-xs text-slate-400">{ko.app.serviceHint}</p>
-          <button
-            className="w-full rounded bg-menuPurple p-3 text-sm font-semibold text-menuPurple-text hover:bg-menuPurple-hover active:bg-menuPurple-hover"
-            onClick={() => openModal('menu')}
-          >
-            {ko.app.menu.open}
-          </button>
-        </div>
-      </section>
-
-      <div id="game-root" className="border border-slate-700 rounded overflow-hidden w-full max-w-5xl aspect-[5/3]" />
+      <div
+        ref={gameCanvasContainerRef}
+        tabIndex={0}
+        className="border border-slate-700 rounded overflow-hidden w-full max-w-5xl aspect-[5/3] focus:outline-none focus:ring-2 focus:ring-violet-500"
+        aria-label="게임 화면"
+      >
+        <div id="game-root" className="w-full h-full" />
+      </div>
 
       <section className="md:hidden w-full max-w-sm bg-slate-900 border border-slate-700 rounded p-3 select-none" style={{ touchAction: 'none' }}>
         <p className="text-xs text-slate-300 mb-2">{ko.app.joystick}</p>
