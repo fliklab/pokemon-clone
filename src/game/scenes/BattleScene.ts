@@ -2,12 +2,19 @@ import Phaser from 'phaser'
 import { ko } from '../../i18n/ko'
 import { useGameStore } from '../../store/useGameStore'
 
+const BASE_GAME_WIDTH = 800
+const BASE_GAME_HEIGHT = 480
+const BASE_TILE_WIDTH = 32
+
 export class BattleScene extends Phaser.Scene {
   private unsub?: () => void
   private endTimer?: Phaser.Time.TimerEvent
   private typingTimer?: Phaser.Time.TimerEvent
   private playerSprite?: Phaser.GameObjects.Text
   private enemySprite?: Phaser.GameObjects.Text
+  private titleText?: Phaser.GameObjects.Text
+  private playerHpLabel?: Phaser.GameObjects.Text
+  private enemyHpLabel?: Phaser.GameObjects.Text
   private messageText?: Phaser.GameObjects.Text
   private phaseCursor = ''
   private currentMessage = ''
@@ -25,10 +32,10 @@ export class BattleScene extends Phaser.Scene {
     this.playerSprite = this.add.text(300, 320, '🧢', { fontSize: '48px' })
     this.enemySprite = this.add.text(630, 95, '🐾', { fontSize: '42px' })
 
-    this.add.text(40, 30, ko.battleScene.title, { color: '#e2e8f0', fontSize: '24px' })
+    this.titleText = this.add.text(40, 30, ko.battleScene.title, { color: '#e2e8f0', fontSize: '24px' })
 
-    const playerHpLabel = this.add.text(100, 290, '', { color: '#e2e8f0', fontSize: '14px' })
-    const enemyHpLabel = this.add.text(560, 50, '', { color: '#e2e8f0', fontSize: '14px' })
+    this.playerHpLabel = this.add.text(100, 290, '', { color: '#e2e8f0', fontSize: '14px' })
+    this.enemyHpLabel = this.add.text(560, 50, '', { color: '#e2e8f0', fontSize: '14px' })
 
     this.add.rectangle(170, 314, 180, 12, 0x0f172a).setOrigin(0, 0.5)
     this.add.rectangle(560, 74, 180, 12, 0x0f172a).setOrigin(0, 0.5)
@@ -41,6 +48,9 @@ export class BattleScene extends Phaser.Scene {
       wordWrap: { width: 720 },
     })
 
+    this.applyBattleTextScale()
+    this.scale.on('resize', this.applyBattleTextScale, this)
+
     this.playBattleStartWarningMusic()
 
     const sync = () => {
@@ -52,8 +62,8 @@ export class BattleScene extends Phaser.Scene {
       }
 
       this.updateTypewriter(battle.message)
-      playerHpLabel.setText(`${battle.player.name} HP ${battle.player.hp}/${battle.player.maxHp}`)
-      enemyHpLabel.setText(`${battle.enemy.name} HP ${battle.enemy.hp}/${battle.enemy.maxHp}`)
+      this.playerHpLabel?.setText(`${battle.player.name} HP ${battle.player.hp}/${battle.player.maxHp}`)
+      this.enemyHpLabel?.setText(`${battle.enemy.name} HP ${battle.enemy.hp}/${battle.enemy.maxHp}`)
 
       const playerRatio = Phaser.Math.Clamp(battle.player.hp / battle.player.maxHp, 0, 1)
       const enemyRatio = Phaser.Math.Clamp(battle.enemy.hp / battle.enemy.maxHp, 0, 1)
@@ -84,6 +94,20 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.shutdown()
     })
+  }
+
+  private getTileWidth() {
+    const widthTile = this.scale.width / (BASE_GAME_WIDTH / BASE_TILE_WIDTH)
+    const heightTile = this.scale.height / (BASE_GAME_HEIGHT / BASE_TILE_WIDTH)
+    return Math.max(16, Math.min(widthTile, heightTile))
+  }
+
+  private applyBattleTextScale() {
+    const tileWidth = this.getTileWidth()
+    this.titleText?.setFontSize(Math.round(tileWidth * 0.6))
+    this.playerHpLabel?.setFontSize(Math.round(tileWidth * 0.5))
+    this.enemyHpLabel?.setFontSize(Math.round(tileWidth * 0.5))
+    this.messageText?.setFontSize(Math.round(tileWidth * 0.55))
   }
 
   private updateTypewriter(nextMessage: string) {
@@ -191,12 +215,17 @@ export class BattleScene extends Phaser.Scene {
   }
 
   shutdown() {
+    this.scale.off('resize', this.applyBattleTextScale, this)
     this.unsub?.()
     this.unsub = undefined
     this.endTimer?.remove(false)
     this.endTimer = undefined
     this.typingTimer?.remove(false)
     this.typingTimer = undefined
+    this.titleText = undefined
+    this.playerHpLabel = undefined
+    this.enemyHpLabel = undefined
+    this.messageText = undefined
     this.currentMessage = ''
   }
 }

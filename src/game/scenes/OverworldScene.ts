@@ -25,6 +25,8 @@ export class OverworldScene extends Phaser.Scene {
   private grassLayer?: Phaser.Tilemaps.TilemapLayer
   private npcLayer?: Phaser.Tilemaps.TilemapLayer
   private interactKey?: Phaser.Input.Keyboard.Key
+  private shopLabelText?: Phaser.GameObjects.Text
+  private pcLabelText?: Phaser.GameObjects.Text
   private wasInGrass = false
 
   constructor() {
@@ -60,23 +62,33 @@ export class OverworldScene extends Phaser.Scene {
     const pcNpc = this.findNpcTile(2)
 
     if (shopNpc) {
-      this.add.text((shopNpc.x - 0.1) * TILE_SIZE * WORLD_SCALE, (shopNpc.y - 0.2) * TILE_SIZE * WORLD_SCALE, ko.overworld.shopLabel, {
-        color: '#fbbf24',
-        fontSize: '10px',
-        align: 'center',
-        backgroundColor: '#00000088',
-        padding: { x: 2, y: 1 },
-      })
+      this.shopLabelText = this.add.text(
+        (shopNpc.x - 0.1) * TILE_SIZE * WORLD_SCALE,
+        (shopNpc.y - 0.2) * TILE_SIZE * WORLD_SCALE,
+        ko.overworld.shopLabel,
+        {
+          color: '#fbbf24',
+          fontSize: '10px',
+          align: 'center',
+          backgroundColor: '#00000088',
+          padding: { x: 2, y: 1 },
+        },
+      )
     }
 
     if (pcNpc) {
-      this.add.text((pcNpc.x + 0.05) * TILE_SIZE * WORLD_SCALE, (pcNpc.y + 0.6) * TILE_SIZE * WORLD_SCALE, ko.overworld.pcLabel, {
-        color: '#38bdf8',
-        fontSize: '10px',
-        align: 'center',
-        backgroundColor: '#00000088',
-        padding: { x: 2, y: 1 },
-      })
+      this.pcLabelText = this.add.text(
+        (pcNpc.x + 0.05) * TILE_SIZE * WORLD_SCALE,
+        (pcNpc.y + 0.6) * TILE_SIZE * WORLD_SCALE,
+        ko.overworld.pcLabel,
+        {
+          color: '#38bdf8',
+          fontSize: '10px',
+          align: 'center',
+          backgroundColor: '#00000088',
+          padding: { x: 2, y: 1 },
+        },
+      )
     }
 
     this.player.setOrigin(0.5, 1)
@@ -93,9 +105,12 @@ export class OverworldScene extends Phaser.Scene {
     this.cameras.main.startFollow(this.player, true, 0.2, 0.2)
     this.cameras.main.roundPixels = true
     this.updateCameraZoom()
+    this.applyOverworldTextScale()
     this.scale.on('resize', this.updateCameraZoom, this)
+    this.scale.on('resize', this.applyOverworldTextScale, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.updateCameraZoom, this)
+      this.scale.off('resize', this.applyOverworldTextScale, this)
     })
 
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
@@ -216,6 +231,14 @@ export class OverworldScene extends Phaser.Scene {
     const scaleY = this.scale.height / targetHeight
     const zoom = Math.max(1.6, Math.min(2.8, Math.min(scaleX, scaleY) * BASE_CAMERA_ZOOM))
     this.cameras.main.setZoom(zoom)
+  }
+
+  private applyOverworldTextScale() {
+    const responsiveScale = Math.min(this.scale.width / 800, this.scale.height / 480)
+    const tileWidth = TILE_SIZE * WORLD_SCALE * responsiveScale
+    const fontSize = Math.max(10, Math.round(tileWidth * 0.55))
+    this.shopLabelText?.setFontSize(fontSize)
+    this.pcLabelText?.setFontSize(fontSize)
   }
 
   private createTilesTexture() {
