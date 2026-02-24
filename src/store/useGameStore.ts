@@ -31,6 +31,7 @@ type PersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' |
 
 type GameState = {
   sceneReady: boolean
+  debugMoveRange: boolean
   playerTile: { x: number; y: number }
   lastEncounter: Encounter | null
   battle: BattleSnapshot & { active: boolean; turn: number; trainerBattle: TrainerBattle | null }
@@ -43,6 +44,7 @@ type GameState = {
   nearbyNpc: NearbyNpc
   interactionNonce: number
   setSceneReady: (ready: boolean) => void
+  toggleDebugMoveRange: () => void
   setPlayerTile: (x: number, y: number) => void
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
@@ -180,6 +182,7 @@ const bootState = defaultState()
 
 export const useGameStore = create<GameState>((set, get) => ({
   sceneReady: false,
+  debugMoveRange: false,
   playerTile: bootState.playerTile,
   lastEncounter: bootState.lastEncounter,
   battle: initialBattleState(bootState.party),
@@ -192,6 +195,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   nearbyNpc: null,
   interactionNonce: 0,
   setSceneReady: (ready) => set({ sceneReady: ready }),
+  toggleDebugMoveRange: () => set((state) => ({ debugMoveRange: !state.debugMoveRange })),
   setPlayerTile: (x, y) => set({ playerTile: { x, y } }),
   setVirtualInput: (direction, active) => {
     set((state) => ({

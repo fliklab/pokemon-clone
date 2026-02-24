@@ -23,7 +23,10 @@ export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private player!: Phaser.Physics.Arcade.Sprite
   private grassLayer?: Phaser.Tilemaps.TilemapLayer
+  private blockedLayer?: Phaser.Tilemaps.TilemapLayer
   private npcLayer?: Phaser.Tilemaps.TilemapLayer
+  private debugMoveGraphics?: Phaser.GameObjects.Graphics
+  private lastDebugTile?: { x: number; y: number }
   private interactKey?: Phaser.Input.Keyboard.Key
   private shopLabelText?: Phaser.GameObjects.Text
   private pcLabelText?: Phaser.GameObjects.Text
@@ -49,12 +52,12 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    const blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer?.setVisible(false)
 
-    blockedLayer?.setCollision([TILE_WALL])
+    this.blockedLayer?.setCollision([TILE_WALL])
 
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
 
@@ -96,8 +99,11 @@ export class OverworldScene extends Phaser.Scene {
     this.player.setDepth(10)
     this.player.setCollideWorldBounds(true)
 
-    if (blockedLayer) {
-      this.physics.add.collider(this.player, blockedLayer)
+    this.debugMoveGraphics = this.add.graphics()
+    this.debugMoveGraphics.setDepth(30)
+
+    if (this.blockedLayer) {
+      this.physics.add.collider(this.player, this.blockedLayer)
     }
 
     this.cameras.main.setBounds(0, 0, map.widthInPixels * WORLD_SCALE, map.heightInPixels * WORLD_SCALE)
@@ -111,6 +117,9 @@ export class OverworldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.scale.off('resize', this.updateCameraZoom, this)
       this.scale.off('resize', this.applyOverworldTextScale, this)
+      this.debugMoveGraphics?.destroy()
+      this.debugMoveGraphics = undefined
+      this.lastDebugTile = undefined
     })
 
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
@@ -151,6 +160,18 @@ export class OverworldScene extends Phaser.Scene {
     const state = useGameStore.getState()
 
     state.setPlayerTile(tileX, tileY)
+
+    if (state.debugMoveRange) {
+      const movedTile = this.lastDebugTile?.x !== tileX || this.lastDebugTile?.y !== tileY
+      if (movedTile) {
+        this.drawDebugMoveRange(tileX, tileY)
+        this.lastDebugTile = { x: tileX, y: tileY }
+      }
+    } else if (this.debugMoveGraphics && this.debugMoveGraphics.visible) {
+      this.debugMoveGraphics.clear()
+      this.debugMoveGraphics.setVisible(false)
+      this.lastDebugTile = undefined
+    }
 
     const nearbyNpc = this.getNearbyNpc(tileX, tileY)
     state.setNearbyNpc(nearbyNpc)
@@ -222,6 +243,89 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     return null
+  }
+
+  private drawDebugMoveRange(originX: number, originY: number) {
+    if (!this.debugMoveGraphics) {
+      return
+    }
+
+    const maxSteps = 3
+    const keyFor = (x: number, y: number) => `${x},${y}`
+    const queue: Array<{ x: number; y: number; steps: number }> = [{ x: originX, y: originY, steps: 0 }]
+    const visited = new Set<string>([keyFor(originX, originY)])
+    const reachable: Array<{ x: number; y: number }> = []
+
+    while (queue.length > 0) {
+      const current = queue.shift()
+      if (!current) {
+        break
+      }
+
+      reachable.push({ x: current.x, y: current.y })
+
+      if (current.steps >= maxSteps) {
+        continue
+      }
+
+      const neighbors = [
+        { x: current.x + 1, y: current.y },
+        { x: current.x - 1, y: current.y },
+        { x: current.x, y: current.y + 1 },
+        { x: current.x, y: current.y - 1 },
+      ]
+
+      for (const next of neighbors) {
+        const key = keyFor(next.x, next.y)
+        if (visited.has(key) || !this.isWalkableTile(next.x, next.y)) {
+          continue
+        }
+
+        visited.add(key)
+        queue.push({ x: next.x, y: next.y, steps: current.steps + 1 })
+      }
+    }
+
+    this.debugMoveGraphics.clear()
+    this.debugMoveGraphics.setVisible(true)
+
+    this.debugMoveGraphics.lineStyle(1.5, 0x60a5fa, 0.5)
+    this.debugMoveGraphics.fillStyle(0x22d3ee, 0.7)
+
+    for (const tile of reachable) {
+      if (tile.x === originX && tile.y === originY) {
+        continue
+      }
+
+      const centerX = (tile.x + 0.5) * TILE_SIZE * WORLD_SCALE
+      const centerY = (tile.y + 0.5) * TILE_SIZE * WORLD_SCALE
+
+      this.debugMoveGraphics.fillCircle(centerX, centerY, 2.5)
+      this.debugMoveGraphics.lineBetween(
+        (originX + 0.5) * TILE_SIZE * WORLD_SCALE,
+        (originY + 0.5) * TILE_SIZE * WORLD_SCALE,
+        centerX,
+        centerY,
+      )
+    }
+  }
+
+  private isWalkableTile(tileX: number, tileY: number): boolean {
+    if (!this.blockedLayer || !this.npcLayer) {
+      return false
+    }
+
+    if (tileX < 0 || tileY < 0 || tileX >= this.blockedLayer.layer.width || tileY >= this.blockedLayer.layer.height) {
+      return false
+    }
+
+    const blockedTile = this.blockedLayer.getTileAt(tileX, tileY)
+    if (blockedTile?.index === TILE_WALL) {
+      return false
+    }
+
+    const npcTile = this.npcLayer.getTileAt(tileX, tileY)
+    return !(npcTile && npcTile.index > 0)
   }
 
   private updateCameraZoom() {

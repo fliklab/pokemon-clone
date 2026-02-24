@@ -28,6 +28,8 @@ function App() {
   const endBattle = useGameStore((state) => state.endBattle)
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
   const requestNpcInteract = useGameStore((state) => state.requestNpcInteract)
+  const debugMoveRange = useGameStore((state) => state.debugMoveRange)
+  const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
 
   const focusGameCanvas = useCallback(() => {
     gameCanvasContainerRef.current?.focus()
@@ -134,6 +136,11 @@ function App() {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
           <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
+          <MenuAction
+            label={ko.app.menu.debugMoveRange(debugMoveRange)}
+            onClick={toggleDebugMoveRange}
+            className="col-span-2"
+          />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
         </div>
       </BaseModal>

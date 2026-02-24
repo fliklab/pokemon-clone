@@ -38,6 +38,7 @@ export const ko = {
       shop: '상점 메뉴',
       pc: 'PC 메뉴',
       save: '저장/불러오기',
+      debugMoveRange: (enabled: boolean) => `디버그 이동 범위 ${enabled ? '끄기' : '켜기'}`,
       close: '닫기',
     },
     modal: {
