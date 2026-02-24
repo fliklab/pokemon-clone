@@ -18,6 +18,9 @@ export const ko = {
     save: '저장 (localStorage)',
     load: '불러오기',
     joystick: '가상 조이스틱',
+    talkButton: 'A 말걸기',
+    talkEnabled: 'NPC 대화 가능',
+    talkDisabled: 'NPC 근처에서 활성화',
     battle: {
       fight: '공격',
       item: (count: number) => `아이템 (${count})`,
@@ -26,7 +29,7 @@ export const ko = {
       return: '필드로 돌아가기',
       hp: 'HP',
     },
-    serviceHint: '타일 안내: [상점] (2,2), [PC] (3,2)',
+    serviceHint: 'NPC 근처에서 A(말걸기)로 상점/PC를 이용하세요',
     menu: {
       open: '메뉴 열기',
       title: '메인 메뉴',

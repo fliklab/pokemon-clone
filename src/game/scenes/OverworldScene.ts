@@ -7,21 +7,21 @@ const WORLD_SCALE = 2
 const BASE_CAMERA_ZOOM = 2
 const PLAYER_SPEED = 140
 
+type NearbyNpc = 'shop' | 'pc' | null
+
 const trainerPositions: Record<string, { x: number; y: number }> = {
   'junior-mia': { x: 9, y: 4 },
   'ace-ryu': { x: 10, y: 6 },
   'leader-nova': { x: 9, y: 7 },
 }
 
-const shopTile = { x: 2, y: 2 }
-const pcTile = { x: 3, y: 2 }
-
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private player!: Phaser.Physics.Arcade.Sprite
   private grassLayer?: Phaser.Tilemaps.TilemapLayer
+  private npcLayer?: Phaser.Tilemaps.TilemapLayer
+  private interactKey?: Phaser.Input.Keyboard.Key
   private wasInGrass = false
-  private lastServiceTick = 0
 
   constructor() {
     super('overworld')
@@ -45,25 +45,36 @@ export class OverworldScene extends Phaser.Scene {
     map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
     const blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    this.npcLayer?.setVisible(false)
 
     blockedLayer?.setCollisionByExclusion([-1, 0])
 
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
 
-    this.add.text((shopTile.x - 0.1) * TILE_SIZE * WORLD_SCALE, (shopTile.y - 0.2) * TILE_SIZE * WORLD_SCALE, ko.overworld.shopLabel, {
-      color: '#fbbf24',
-      fontSize: '10px',
-      align: 'center',
-      backgroundColor: '#00000088',
-      padding: { x: 2, y: 1 },
-    })
-    this.add.text((pcTile.x + 0.05) * TILE_SIZE * WORLD_SCALE, (pcTile.y + 0.6) * TILE_SIZE * WORLD_SCALE, ko.overworld.pcLabel, {
-      color: '#38bdf8',
-      fontSize: '10px',
-      align: 'center',
-      backgroundColor: '#00000088',
-      padding: { x: 2, y: 1 },
-    })
+    const shopNpc = this.findNpcTile(1)
+    const pcNpc = this.findNpcTile(2)
+
+    if (shopNpc) {
+      this.add.text((shopNpc.x - 0.1) * TILE_SIZE * WORLD_SCALE, (shopNpc.y - 0.2) * TILE_SIZE * WORLD_SCALE, ko.overworld.shopLabel, {
+        color: '#fbbf24',
+        fontSize: '10px',
+        align: 'center',
+        backgroundColor: '#00000088',
+        padding: { x: 2, y: 1 },
+      })
+    }
+
+    if (pcNpc) {
+      this.add.text((pcNpc.x + 0.05) * TILE_SIZE * WORLD_SCALE, (pcNpc.y + 0.6) * TILE_SIZE * WORLD_SCALE, ko.overworld.pcLabel, {
+        color: '#38bdf8',
+        fontSize: '10px',
+        align: 'center',
+        backgroundColor: '#00000088',
+        padding: { x: 2, y: 1 },
+      })
+    }
+
     this.player.setOrigin(0.5, 1)
     this.player.setScale(WORLD_SCALE)
     this.player.setDepth(10)
@@ -84,6 +95,7 @@ export class OverworldScene extends Phaser.Scene {
     })
 
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
+    this.interactKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A)
 
     useGameStore.getState().setSceneReady(true)
   }
@@ -121,6 +133,14 @@ export class OverworldScene extends Phaser.Scene {
 
     state.setPlayerTile(tileX, tileY)
 
+    const nearbyNpc = this.getNearbyNpc(tileX, tileY)
+    state.setNearbyNpc(nearbyNpc)
+
+    const keyboardInteract = this.interactKey ? Phaser.Input.Keyboard.JustDown(this.interactKey) : false
+    if (keyboardInteract && (nearbyNpc === 'shop' || nearbyNpc === 'pc')) {
+      state.requestNpcInteract()
+    }
+
     const trainer = getGymTrainers().find((entry) => {
       const pos = trainerPositions[entry.id]
       return pos?.x === tileX && pos?.y === tileY
@@ -128,20 +148,6 @@ export class OverworldScene extends Phaser.Scene {
 
     if (trainer && !state.defeatedTrainers.includes(trainer.id)) {
       state.triggerTrainerBattle(trainer)
-    }
-
-    const onShop = tileX === shopTile.x && tileY === shopTile.y
-    const onPc = tileX === pcTile.x && tileY === pcTile.y
-    const canUseService = Date.now() - this.lastServiceTick > 500
-
-    if (canUseService && onShop) {
-      state.buyPotion()
-      this.lastServiceTick = Date.now()
-    }
-
-    if (canUseService && onPc) {
-      state.healPartyAtPc()
-      this.lastServiceTick = Date.now()
     }
 
     if (inGrass && !this.wasInGrass) {
@@ -154,6 +160,49 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.wasInGrass = inGrass
+  }
+
+  private findNpcTile(tileIndex: number): { x: number; y: number } | null {
+    if (!this.npcLayer) {
+      return null
+    }
+
+    for (let y = 0; y < this.npcLayer.layer.height; y += 1) {
+      for (let x = 0; x < this.npcLayer.layer.width; x += 1) {
+        const tile = this.npcLayer.getTileAt(x, y)
+        if (tile?.index === tileIndex) {
+          return { x, y }
+        }
+      }
+    }
+
+    return null
+  }
+
+  private getNearbyNpc(tileX: number, tileY: number): NearbyNpc {
+    if (!this.npcLayer) {
+      return null
+    }
+
+    const offsets = [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]
+
+    for (const [dx, dy] of offsets) {
+      const tile = this.npcLayer.getTileAt(tileX + dx, tileY + dy)
+      if (tile?.index === 1) {
+        return 'shop'
+      }
+      if (tile?.index === 2) {
+        return 'pc'
+      }
+    }
+
+    return null
   }
 
   private updateCameraZoom() {

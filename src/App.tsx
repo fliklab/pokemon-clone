@@ -7,9 +7,6 @@ import { useGameStore } from './store/useGameStore'
 
 type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | null
 
-const SHOP_TILE = { x: 2, y: 2 }
-const PC_TILE = { x: 3, y: 2 }
-
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
@@ -18,6 +15,8 @@ function App() {
   const playerTile = useGameStore((state) => state.playerTile)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
   const battle = useGameStore((state) => state.battle)
+  const nearbyNpc = useGameStore((state) => state.nearbyNpc)
+  const interactionNonce = useGameStore((state) => state.interactionNonce)
   const party = useGameStore((state) => state.party)
   const badges = useGameStore((state) => state.badges)
   const defeatedTrainers = useGameStore((state) => state.defeatedTrainers)
@@ -31,6 +30,7 @@ function App() {
   const loadGame = useGameStore((state) => state.loadGame)
   const endBattle = useGameStore((state) => state.endBattle)
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
+  const requestNpcInteract = useGameStore((state) => state.requestNpcInteract)
 
   useEffect(() => {
     if (!gameRef.current) {
@@ -56,9 +56,28 @@ function App() {
   const closeModal = () => setActiveModal(null)
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
-  const canOpenShop = playerTile.x === SHOP_TILE.x && playerTile.y === SHOP_TILE.y
-  const canOpenPc = playerTile.x === PC_TILE.x && playerTile.y === PC_TILE.y
+  const canOpenShop = nearbyNpc === 'shop'
+  const canOpenPc = nearbyNpc === 'pc'
   const selectedPartyMonster = party.find((monster) => monster.id === selectedPartyId) ?? party[0]
+
+  useEffect(() => {
+    if (interactionNonce === 0) {
+      return
+    }
+
+    const modal = nearbyNpc === 'shop' ? 'shop' : nearbyNpc === 'pc' ? 'pc' : null
+    if (!modal) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setActiveModal(modal)
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [interactionNonce, nearbyNpc])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
@@ -101,13 +120,17 @@ function App() {
 
       <section className="md:hidden w-full max-w-sm bg-slate-900 border border-slate-700 rounded p-3 select-none" style={{ touchAction: 'none' }}>
         <p className="text-xs text-slate-300 mb-2">{ko.app.joystick}</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <span />
           <DirectionButton direction="up" label="↑" onInput={setVirtualInput} />
           <span />
+          <ActionButton label={ko.app.talkButton} onClick={requestNpcInteract} disabled={!nearbyNpc} />
           <DirectionButton direction="left" label="←" onInput={setVirtualInput} />
           <DirectionButton direction="down" label="↓" onInput={setVirtualInput} />
           <DirectionButton direction="right" label="→" onInput={setVirtualInput} />
+          <p className="col-span-1 text-[11px] text-slate-400 self-center text-center">
+            {nearbyNpc ? ko.app.talkEnabled : ko.app.talkDisabled}
+          </p>
         </div>
       </section>
 
@@ -164,7 +187,7 @@ function App() {
       <BaseModal open={activeModal === 'shop'} onClose={closeModal} title={ko.app.modal.shopTitle}>
         <div className="space-y-3 text-sm">
           <p className="text-emerald-300">{ko.app.modal.money(money)}</p>
-          {!canOpenShop && <p className="text-amber-300 text-xs">상점 타일(2,2)에서만 이용할 수 있습니다.</p>}
+          {!canOpenShop && <p className="text-amber-300 text-xs">상점 NPC 근처에서 A(말걸기)로 이용할 수 있습니다.</p>}
           <button
             className="w-full rounded bg-sky-700 active:bg-sky-600 p-3 font-semibold disabled:opacity-50"
             onClick={buyPotion}
@@ -177,7 +200,7 @@ function App() {
 
       <BaseModal open={activeModal === 'pc'} onClose={closeModal} title={ko.app.modal.pcTitle}>
         <div className="space-y-2 text-sm">
-          {!canOpenPc && <p className="text-amber-300 text-xs">PC 타일(3,2)에서만 이용할 수 있습니다.</p>}
+          {!canOpenPc && <p className="text-amber-300 text-xs">PC NPC 근처에서 A(말걸기)로 이용할 수 있습니다.</p>}
           <button
             className="w-full rounded bg-teal-700 active:bg-teal-600 p-3 font-semibold disabled:opacity-50"
             onClick={healPartyAtPc}
@@ -313,6 +336,24 @@ function DirectionButton({ direction, label, onInput }: DirectionButtonProps) {
       onPointerCancel={() => onInput(direction, false)}
       onPointerLeave={() => onInput(direction, false)}
       onContextMenu={(event) => event.preventDefault()}
+    >
+      {label}
+    </button>
+  )
+}
+
+type ActionButtonProps = {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}
+
+function ActionButton({ label, onClick, disabled = false }: ActionButtonProps) {
+  return (
+    <button
+      className="h-14 rounded bg-amber-700 text-sm font-semibold disabled:opacity-50"
+      onClick={onClick}
+      disabled={disabled}
     >
       {label}
     </button>

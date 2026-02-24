@@ -25,6 +25,8 @@ type DirectionalInput = {
   right: boolean
 }
 
+type NearbyNpc = 'shop' | 'pc' | null
+
 type PersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'>
 
 type GameState = {
@@ -38,12 +40,16 @@ type GameState = {
   money: number
   potions: number
   virtualInput: DirectionalInput
+  nearbyNpc: NearbyNpc
+  interactionNonce: number
   setSceneReady: (ready: boolean) => void
   setPlayerTile: (x: number, y: number) => void
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
   chooseBattleCommand: (command: BattleCommand) => void
   setVirtualInput: (direction: keyof DirectionalInput, active: boolean) => void
+  setNearbyNpc: (target: NearbyNpc) => void
+  requestNpcInteract: () => void
   healPartyAtPc: () => void
   buyPotion: () => void
   saveGame: () => void
@@ -52,8 +58,6 @@ type GameState = {
 }
 
 const STORAGE_KEY = 'pokemon-clone-save-v1'
-const SHOP_TILE = { x: 2, y: 2 }
-const PC_TILE = { x: 3, y: 2 }
 
 const trainerRoster: TrainerBattle[] = [
   {
@@ -159,14 +163,6 @@ function toCaughtPartyMonster(enemy: Battler): PartyMonster {
   }
 }
 
-function canUseShop(state: GameState): boolean {
-  return state.playerTile.x === SHOP_TILE.x && state.playerTile.y === SHOP_TILE.y
-}
-
-function canUsePc(state: GameState): boolean {
-  return state.playerTile.x === PC_TILE.x && state.playerTile.y === PC_TILE.y
-}
-
 function defaultState(): Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'> {
   const saved = getPersistedState()
   return saved ?? {
@@ -193,6 +189,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   money: bootState.money,
   potions: bootState.potions,
   virtualInput: initialVirtualInput,
+  nearbyNpc: null,
+  interactionNonce: 0,
   setSceneReady: (ready) => set({ sceneReady: ready }),
   setPlayerTile: (x, y) => set({ playerTile: { x, y } }),
   setVirtualInput: (direction, active) => {
@@ -203,9 +201,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     }))
   },
+  setNearbyNpc: (target) => set({ nearbyNpc: target }),
+  requestNpcInteract: () => set((state) => ({ interactionNonce: state.interactionNonce + 1 })),
   healPartyAtPc: () => {
     set((state) => {
-      if (!canUsePc(state)) {
+      if (state.nearbyNpc !== 'pc') {
         return state
       }
 
@@ -218,7 +218,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   buyPotion: () => {
     set((state) => {
-      if (!canUseShop(state) || state.money < 20) {
+      if (state.nearbyNpc !== 'shop' || state.money < 20) {
         return state
       }
 
@@ -242,6 +242,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...saved,
       battle: initialBattleState(saved.party),
       virtualInput: initialVirtualInput,
+      nearbyNpc: null,
+      interactionNonce: 0,
     }))
   },
   triggerEncounter: (x, y) => {
