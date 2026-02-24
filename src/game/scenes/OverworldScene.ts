@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { ko } from '../../i18n/ko'
 import { getGymTrainers, useGameStore } from '../../store/useGameStore'
 
 const TILE_SIZE = 16
@@ -49,13 +50,19 @@ export class OverworldScene extends Phaser.Scene {
 
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
 
-    this.add.text((shopTile.x + 0.1) * TILE_SIZE * WORLD_SCALE, (shopTile.y + 0.2) * TILE_SIZE * WORLD_SCALE, 'SHOP', {
+    this.add.text((shopTile.x - 0.1) * TILE_SIZE * WORLD_SCALE, (shopTile.y - 0.2) * TILE_SIZE * WORLD_SCALE, ko.overworld.shopLabel, {
       color: '#fbbf24',
-      fontSize: '11px',
+      fontSize: '10px',
+      align: 'center',
+      backgroundColor: '#00000088',
+      padding: { x: 2, y: 1 },
     })
-    this.add.text((pcTile.x + 0.15) * TILE_SIZE * WORLD_SCALE, (pcTile.y + 0.8) * TILE_SIZE * WORLD_SCALE, 'PC', {
+    this.add.text((pcTile.x + 0.05) * TILE_SIZE * WORLD_SCALE, (pcTile.y + 0.6) * TILE_SIZE * WORLD_SCALE, ko.overworld.pcLabel, {
       color: '#38bdf8',
-      fontSize: '11px',
+      fontSize: '10px',
+      align: 'center',
+      backgroundColor: '#00000088',
+      padding: { x: 2, y: 1 },
     })
     this.player.setOrigin(0.5, 1)
     this.player.setScale(WORLD_SCALE)
@@ -107,7 +114,8 @@ export class OverworldScene extends Phaser.Scene {
 
     const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
     const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
-    const inGrass = this.grassLayer?.hasTileAt(tileX, tileY) ?? false
+    const grassTile = this.grassLayer?.getTileAt(tileX, tileY)
+    const inGrass = Boolean(grassTile && grassTile.index > 0)
 
     const state = useGameStore.getState()
 
@@ -164,16 +172,29 @@ export class OverworldScene extends Phaser.Scene {
 
     const graphics = this.add.graphics({ x: 0, y: 0 })
 
-    graphics.fillStyle(0x5b7c3f)
+    // Ground tile (path)
+    graphics.fillStyle(0x667a3e)
     graphics.fillRect(0, 0, TILE_SIZE, TILE_SIZE)
+    graphics.fillStyle(0x748847)
+    graphics.fillRect(0, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2)
 
-    graphics.fillStyle(0x3f8c3c)
+    // Grass tile (encounter zone)
+    graphics.fillStyle(0x2d8d43)
     graphics.fillRect(TILE_SIZE, 0, TILE_SIZE, TILE_SIZE)
-    graphics.lineStyle(1, 0x266326)
+    graphics.lineStyle(1, 0x165a28)
     graphics.strokeRect(TILE_SIZE + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
+    graphics.fillStyle(0x4ec262)
+    graphics.fillRect(TILE_SIZE + 2, 3, 2, 6)
+    graphics.fillRect(TILE_SIZE + 7, 5, 2, 7)
+    graphics.fillRect(TILE_SIZE + 11, 2, 2, 5)
 
-    graphics.fillStyle(0x6b4f2a)
+    // Wall tile (blocked)
+    graphics.fillStyle(0x5b4630)
     graphics.fillRect(TILE_SIZE * 2, 0, TILE_SIZE, TILE_SIZE)
+    graphics.lineStyle(1, 0x2f2418)
+    graphics.strokeRect(TILE_SIZE * 2 + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
+    graphics.lineBetween(TILE_SIZE * 2, TILE_SIZE / 2, TILE_SIZE * 3, TILE_SIZE / 2)
+    graphics.lineBetween(TILE_SIZE * 2 + TILE_SIZE / 2, 0, TILE_SIZE * 2 + TILE_SIZE / 2, TILE_SIZE)
 
     graphics.generateTexture('overworld-tiles', TILE_SIZE * 3, TILE_SIZE)
     graphics.destroy()

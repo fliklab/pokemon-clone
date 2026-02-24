@@ -3,6 +3,7 @@ import { applyDamage, applyEndTurnStatus, calculateDamage } from '../battle/dama
 import { calculateCatchChance, rollCatch } from '../battle/capture'
 import type { BattleCommand, BattleSnapshot, Battler } from '../battle/types'
 import { createStarterMonster, createWildEnemy, grantBattleExp, type PartyMonster } from '../progression/leveling'
+import { ko } from '../i18n/ko'
 
 type Encounter = {
   x: number
@@ -55,20 +56,20 @@ const STORAGE_KEY = 'pokemon-clone-save-v1'
 const trainerRoster: TrainerBattle[] = [
   {
     id: 'junior-mia',
-    name: 'Junior Mia',
-    badgeReward: 'Sprout Pin',
+    name: ko.trainers.juniorMia,
+    badgeReward: ko.trainers.sproutPin,
     enemy: { name: 'Sparko', level: 6, hp: 34, maxHp: 34, attack: 14, defense: 12, speed: 12, type: 'electric', status: 'none' },
   },
   {
     id: 'ace-ryu',
-    name: 'Ace Ryu',
-    badgeReward: 'Tide Crest',
+    name: ko.trainers.aceRyu,
+    badgeReward: ko.trainers.tideCrest,
     enemy: { name: 'Aquava', level: 7, hp: 38, maxHp: 38, attack: 15, defense: 12, speed: 13, type: 'water', status: 'none' },
   },
   {
     id: 'leader-nova',
-    name: 'Leader Nova',
-    badgeReward: 'Flare Emblem',
+    name: ko.trainers.leaderNova,
+    badgeReward: ko.trainers.flareEmblem,
     enemy: { name: 'Flarex', level: 8, hp: 42, maxHp: 42, attack: 16, defense: 13, speed: 14, type: 'fire', status: 'none' },
   },
 ]
@@ -82,7 +83,7 @@ const initialBattleState = (party: PartyMonster[]): GameState['battle'] => ({
   phase: 'idle',
   player: party[0],
   enemy: createWildEnemy(party[0].level, 0),
-  message: 'Walk in grass to encounter a wild monster.',
+  message: ko.store.walkHint,
   lastDamage: 0,
   turn: 0,
   trainerBattle: null,
@@ -239,7 +240,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         phase: 'player_turn',
         player: { ...leadMonster },
         enemy,
-        message: `A wild ${enemy.name} appeared!`,
+        message: ko.store.wildAppeared(enemy.name),
         lastDamage: 0,
         turn: 1,
         trainerBattle: null,
@@ -259,7 +260,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         phase: 'player_turn',
         player: { ...leadMonster },
         enemy: trainer.enemy,
-        message: `${trainer.name} challenges you for the ${trainer.badgeReward}!`,
+        message: ko.store.trainerChallenge(trainer.name, trainer.badgeReward),
         lastDamage: 0,
         turn: 1,
         trainerBattle: trainer,
@@ -277,7 +278,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
-            message: 'Trainer battles do not allow running away!',
+            message: ko.store.trainerNoRun,
           },
         })
         return
@@ -289,7 +290,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           battle: {
             ...battle,
             phase: 'escaped',
-            message: 'Got away safely!',
+            message: ko.store.escaped,
           },
         })
         return
@@ -299,7 +300,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         battle: {
           ...battle,
           phase: 'enemy_turn',
-          message: 'Could not escape!',
+          message: ko.store.failedEscape,
         },
       })
     }
@@ -309,7 +310,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
-            message: 'You cannot catch another trainer’s monster.',
+            message: ko.store.cannotCatchTrainerMonster,
           },
         })
         return
@@ -322,7 +323,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           battle: {
             ...battle,
             phase: 'caught',
-            message: `You caught ${battle.enemy.name}!`,
+            message: ko.store.caught(battle.enemy.name),
           },
         })
         return
@@ -332,7 +333,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         battle: {
           ...battle,
           phase: 'enemy_turn',
-          message: `${battle.enemy.name} broke free!`,
+          message: ko.store.brokeFree(battle.enemy.name),
         },
       })
     }
@@ -342,7 +343,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
-            message: 'No potions left! Visit the shop.',
+            message: ko.store.noPotion,
           },
         })
         return
@@ -355,7 +356,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           ...battle,
           player: { ...battle.player, hp: healed },
           phase: 'enemy_turn',
-          message: `${battle.player.name} recovered HP with a potion.`,
+          message: ko.store.potionUsed(battle.player.name),
         },
       }))
     }
@@ -371,13 +372,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         const damage = calculateDamage(player, enemy)
         enemy = applyDamage(enemy, damage)
         lastDamage = damage
-        message = `${player.name} dealt ${damage} damage!`
+        message = ko.store.dealtDamage(player.name, damage)
       }
 
       const enemyAttack = () => {
         const damage = calculateDamage(enemy, player)
         player = applyDamage(player, damage)
-        message += ` ${enemy.name} dealt ${damage} damage back!`
+        message += ` ${ko.store.dealtDamageBack(enemy.name, damage)}`
       }
 
       if (playerFirst) {
@@ -414,8 +415,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
 
         const lead = party[0]
-        const evolutionNote = lead.evolutionRule ? '' : ` ${lead.name} has evolved!`
-        resolvedMessage += ` Victory! ${lead.name} is now Lv.${lead.level}.${evolutionNote}`
+        const evolutionNote = lead.evolutionRule ? '' : ko.store.evolved(lead.name)
+        resolvedMessage += ko.store.victory(lead.name, lead.level, evolutionNote)
       }
 
       set({
@@ -445,7 +446,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           ...updated,
           player: playerAfter,
           phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
-          message: `${updated.message} ${updated.enemy.name} attacks for ${retaliation}!`,
+          message: `${updated.message} ${ko.store.enemyAttack(updated.enemy.name, retaliation)}`,
           turn: updated.turn + 1,
         },
       })

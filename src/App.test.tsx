@@ -12,6 +12,6 @@ vi.mock('./game/createGame', () => ({
 describe('App', () => {
   it('renders starter title', () => {
     render(<App />)
-    expect(screen.getByText('Pokemon Clone Starter')).toBeInTheDocument()
+    expect(screen.getByText('포켓몬 클론 스타터')).toBeInTheDocument()
   })
 })

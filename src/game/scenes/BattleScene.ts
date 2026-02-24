@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { ko } from '../../i18n/ko'
 import { useGameStore } from '../../store/useGameStore'
 
 export class BattleScene extends Phaser.Scene {
@@ -21,7 +22,15 @@ export class BattleScene extends Phaser.Scene {
     this.playerSprite = this.add.text(300, 320, '🧢', { fontSize: '48px' })
     this.enemySprite = this.add.text(630, 95, '🐾', { fontSize: '42px' })
 
-    this.add.text(40, 30, 'Battle Scene', { color: '#e2e8f0', fontSize: '24px' })
+    this.add.text(40, 30, ko.battleScene.title, { color: '#e2e8f0', fontSize: '24px' })
+
+    const playerHpLabel = this.add.text(100, 290, '', { color: '#e2e8f0', fontSize: '14px' })
+    const enemyHpLabel = this.add.text(560, 50, '', { color: '#e2e8f0', fontSize: '14px' })
+
+    this.add.rectangle(170, 314, 180, 12, 0x0f172a).setOrigin(0, 0.5)
+    this.add.rectangle(560, 74, 180, 12, 0x0f172a).setOrigin(0, 0.5)
+    const playerHpFill = this.add.rectangle(170, 314, 180, 12, 0x22c55e).setOrigin(0, 0.5)
+    const enemyHpFill = this.add.rectangle(560, 74, 180, 12, 0x22c55e).setOrigin(0, 0.5)
 
     const messageText = this.add.text(40, 420, '', {
       color: '#f8fafc',
@@ -38,6 +47,16 @@ export class BattleScene extends Phaser.Scene {
       }
 
       messageText.setText(battle.message)
+      playerHpLabel.setText(`${battle.player.name} HP ${battle.player.hp}/${battle.player.maxHp}`)
+      enemyHpLabel.setText(`${battle.enemy.name} HP ${battle.enemy.hp}/${battle.enemy.maxHp}`)
+
+      const playerRatio = Phaser.Math.Clamp(battle.player.hp / battle.player.maxHp, 0, 1)
+      const enemyRatio = Phaser.Math.Clamp(battle.enemy.hp / battle.enemy.maxHp, 0, 1)
+      playerHpFill.width = 180 * playerRatio
+      enemyHpFill.width = 180 * enemyRatio
+      playerHpFill.fillColor = playerRatio > 0.5 ? 0x22c55e : playerRatio > 0.2 ? 0xf59e0b : 0xef4444
+      enemyHpFill.fillColor = enemyRatio > 0.5 ? 0x22c55e : enemyRatio > 0.2 ? 0xf59e0b : 0xef4444
+
       this.applyPlaceholders(battle.phase)
 
       const ended = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
