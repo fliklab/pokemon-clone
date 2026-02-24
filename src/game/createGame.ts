@@ -2,6 +2,9 @@ import Phaser from 'phaser'
 import { OverworldScene } from './scenes/OverworldScene'
 import { BattleScene } from './scenes/BattleScene'
 
+const BASE_WIDTH = 800
+const BASE_HEIGHT = 480
+
 class BootScene extends Phaser.Scene {
   private readonly onReady: () => void
 
@@ -23,10 +26,17 @@ export function createGame(parent: string | HTMLElement, onReady: () => void) {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    width: 800,
-    height: 480,
+    width: BASE_WIDTH,
+    height: BASE_HEIGHT,
     backgroundColor: '#0f172a',
     pixelArt: true,
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: BASE_WIDTH,
+      height: BASE_HEIGHT,
+      zoom: 1,
+    },
     physics: {
       default: 'arcade',
       arcade: {

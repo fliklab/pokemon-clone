@@ -1,9 +1,16 @@
 import Phaser from 'phaser'
-import { useGameStore } from '../../store/useGameStore'
+import { getGymTrainers, useGameStore } from '../../store/useGameStore'
 
 const TILE_SIZE = 16
-const SCALE = 2
+const WORLD_SCALE = 2
+const BASE_CAMERA_ZOOM = 2
 const PLAYER_SPEED = 140
+
+const trainerPositions: Record<string, { x: number; y: number }> = {
+  'junior-mia': { x: 9, y: 4 },
+  'ace-ryu': { x: 10, y: 6 },
+  'leader-nova': { x: 9, y: 7 },
+}
 
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -30,24 +37,30 @@ export class OverworldScene extends Phaser.Scene {
       throw new Error('Failed to load tileset for overworld map')
     }
 
-    map.createLayer('Ground', tiles, 0, 0)?.setScale(SCALE)
-    const blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(SCALE)
-    this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(SCALE)
+    map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    const blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
 
     blockedLayer?.setCollisionByExclusion([-1, 0])
 
-    this.player = this.physics.add.sprite(TILE_SIZE * SCALE * 2, TILE_SIZE * SCALE * 2, 'player')
+    this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
+    this.player.setOrigin(0.5, 1)
+    this.player.setScale(WORLD_SCALE)
     this.player.setCollideWorldBounds(true)
 
     if (blockedLayer) {
       this.physics.add.collider(this.player, blockedLayer)
     }
 
-    this.cameras.main.setBounds(0, 0, map.widthInPixels * SCALE, map.heightInPixels * SCALE)
-    this.physics.world.setBounds(0, 0, map.widthInPixels * SCALE, map.heightInPixels * SCALE)
+    this.cameras.main.setBounds(0, 0, map.widthInPixels * WORLD_SCALE, map.heightInPixels * WORLD_SCALE)
+    this.physics.world.setBounds(0, 0, map.widthInPixels * WORLD_SCALE, map.heightInPixels * WORLD_SCALE)
     this.cameras.main.startFollow(this.player, true, 0.2, 0.2)
-    this.cameras.main.setZoom(2)
     this.cameras.main.roundPixels = true
+    this.updateCameraZoom()
+    this.scale.on('resize', this.updateCameraZoom, this)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scale.off('resize', this.updateCameraZoom, this)
+    })
 
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
 
@@ -62,25 +75,36 @@ export class OverworldScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body
     body.setVelocity(0)
 
-    if (this.cursors.left?.isDown) {
+    const virtualInput = useGameStore.getState().virtualInput
+
+    if (this.cursors.left?.isDown || virtualInput.left) {
       body.setVelocityX(-PLAYER_SPEED)
-    } else if (this.cursors.right?.isDown) {
+    } else if (this.cursors.right?.isDown || virtualInput.right) {
       body.setVelocityX(PLAYER_SPEED)
     }
 
-    if (this.cursors.up?.isDown) {
+    if (this.cursors.up?.isDown || virtualInput.up) {
       body.setVelocityY(-PLAYER_SPEED)
-    } else if (this.cursors.down?.isDown) {
+    } else if (this.cursors.down?.isDown || virtualInput.down) {
       body.setVelocityY(PLAYER_SPEED)
     }
 
     body.velocity.normalize().scale(PLAYER_SPEED)
 
-    const tileX = Math.floor(this.player.x / (TILE_SIZE * SCALE))
-    const tileY = Math.floor(this.player.y / (TILE_SIZE * SCALE))
+    const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
+    const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
     const inGrass = this.grassLayer?.hasTileAt(tileX, tileY) ?? false
 
     const state = useGameStore.getState()
+
+    const trainer = getGymTrainers().find((entry) => {
+      const pos = trainerPositions[entry.id]
+      return pos?.x === tileX && pos?.y === tileY
+    })
+
+    if (trainer && !state.defeatedTrainers.includes(trainer.id)) {
+      state.triggerTrainerBattle(trainer)
+    }
 
     if (inGrass && !this.wasInGrass) {
       state.triggerEncounter(tileX, tileY)
@@ -94,6 +118,15 @@ export class OverworldScene extends Phaser.Scene {
     this.wasInGrass = inGrass
 
     state.setPlayerTile(tileX, tileY)
+  }
+
+  private updateCameraZoom() {
+    const targetWidth = 800
+    const targetHeight = 480
+    const scaleX = this.scale.width / targetWidth
+    const scaleY = this.scale.height / targetHeight
+    const zoom = Math.max(1.6, Math.min(2.8, Math.min(scaleX, scaleY) * BASE_CAMERA_ZOOM))
+    this.cameras.main.setZoom(zoom)
   }
 
   private createTilesTexture() {
