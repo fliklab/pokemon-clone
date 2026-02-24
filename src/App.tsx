@@ -138,8 +138,6 @@ function App() {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
           <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
-          <MenuAction label={ko.app.menu.shop} onClick={() => openModal('shop')} disabled={!canOpenShop} />
-          <MenuAction label={ko.app.menu.pc} onClick={() => openModal('pc')} disabled={!canOpenPc} />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
         </div>
       </BaseModal>
