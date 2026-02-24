@@ -7,6 +7,10 @@ const WORLD_SCALE = 2
 const BASE_CAMERA_ZOOM = 2
 const PLAYER_SPEED = 140
 
+const TILE_GROUND = 1
+const TILE_GRASS = 2
+const TILE_WALL = 3
+
 type NearbyNpc = 'shop' | 'pc' | null
 
 const trainerPositions: Record<string, { x: number; y: number }> = {
@@ -48,7 +52,7 @@ export class OverworldScene extends Phaser.Scene {
     this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer?.setVisible(false)
 
-    blockedLayer?.setCollisionByExclusion([-1, 0])
+    blockedLayer?.setCollision([TILE_WALL])
 
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
 
@@ -127,7 +131,7 @@ export class OverworldScene extends Phaser.Scene {
     const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
     const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
     const grassTile = this.grassLayer?.getTileAt(tileX, tileY)
-    const inGrass = Boolean(grassTile && grassTile.index > 0)
+    const inGrass = grassTile?.index === TILE_GRASS
 
     const state = useGameStore.getState()
 
@@ -221,31 +225,35 @@ export class OverworldScene extends Phaser.Scene {
 
     const graphics = this.add.graphics({ x: 0, y: 0 })
 
+    const groundX = TILE_SIZE * (TILE_GROUND - 1)
+    const grassX = TILE_SIZE * (TILE_GRASS - 1)
+    const wallX = TILE_SIZE * (TILE_WALL - 1)
+
     // Ground tile (path)
     graphics.fillStyle(0x667a3e)
-    graphics.fillRect(0, 0, TILE_SIZE, TILE_SIZE)
+    graphics.fillRect(groundX, 0, TILE_SIZE, TILE_SIZE)
     graphics.fillStyle(0x748847)
-    graphics.fillRect(0, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2)
+    graphics.fillRect(groundX, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2)
 
     // Grass tile (encounter zone)
     graphics.fillStyle(0x2d8d43)
-    graphics.fillRect(TILE_SIZE, 0, TILE_SIZE, TILE_SIZE)
+    graphics.fillRect(grassX, 0, TILE_SIZE, TILE_SIZE)
     graphics.lineStyle(1, 0x165a28)
-    graphics.strokeRect(TILE_SIZE + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
+    graphics.strokeRect(grassX + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
     graphics.fillStyle(0x4ec262)
-    graphics.fillRect(TILE_SIZE + 2, 3, 2, 6)
-    graphics.fillRect(TILE_SIZE + 7, 5, 2, 7)
-    graphics.fillRect(TILE_SIZE + 11, 2, 2, 5)
+    graphics.fillRect(grassX + 2, 3, 2, 6)
+    graphics.fillRect(grassX + 7, 5, 2, 7)
+    graphics.fillRect(grassX + 11, 2, 2, 5)
 
     // Wall tile (blocked)
     graphics.fillStyle(0x5b4630)
-    graphics.fillRect(TILE_SIZE * 2, 0, TILE_SIZE, TILE_SIZE)
+    graphics.fillRect(wallX, 0, TILE_SIZE, TILE_SIZE)
     graphics.lineStyle(1, 0x2f2418)
-    graphics.strokeRect(TILE_SIZE * 2 + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
-    graphics.lineBetween(TILE_SIZE * 2, TILE_SIZE / 2, TILE_SIZE * 3, TILE_SIZE / 2)
-    graphics.lineBetween(TILE_SIZE * 2 + TILE_SIZE / 2, 0, TILE_SIZE * 2 + TILE_SIZE / 2, TILE_SIZE)
+    graphics.strokeRect(wallX + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
+    graphics.lineBetween(wallX, TILE_SIZE / 2, wallX + TILE_SIZE, TILE_SIZE / 2)
+    graphics.lineBetween(wallX + TILE_SIZE / 2, 0, wallX + TILE_SIZE / 2, TILE_SIZE)
 
-    graphics.generateTexture('overworld-tiles', TILE_SIZE * 3, TILE_SIZE)
+    graphics.generateTexture('overworld-tiles', TILE_SIZE * TILE_WALL, TILE_SIZE)
     graphics.destroy()
   }
 
