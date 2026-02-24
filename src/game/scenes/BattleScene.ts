@@ -90,7 +90,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private playTone(frequency: number) {
-    const audioCtx = this.sound.context
+    const manager = this.sound as { context?: AudioContext }
+    const audioCtx = manager.context
     if (!audioCtx) {
       return
     }

@@ -12,8 +12,14 @@ function App() {
   const party = useGameStore((state) => state.party)
   const badges = useGameStore((state) => state.badges)
   const defeatedTrainers = useGameStore((state) => state.defeatedTrainers)
+  const money = useGameStore((state) => state.money)
+  const potions = useGameStore((state) => state.potions)
   const setSceneReady = useGameStore((state) => state.setSceneReady)
   const chooseBattleCommand = useGameStore((state) => state.chooseBattleCommand)
+  const healPartyAtPc = useGameStore((state) => state.healPartyAtPc)
+  const buyPotion = useGameStore((state) => state.buyPotion)
+  const saveGame = useGameStore((state) => state.saveGame)
+  const loadGame = useGameStore((state) => state.loadGame)
   const endBattle = useGameStore((state) => state.endBattle)
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
 
@@ -44,7 +50,7 @@ function App() {
       <p className="text-slate-300 text-sm md:text-base">Player tile: ({playerTile.x}, {playerTile.y})</p>
       <p className="text-emerald-300 text-sm md:text-base">{encounterText}</p>
 
-      <section className="w-full max-w-5xl grid md:grid-cols-2 gap-3">
+      <section className="w-full max-w-5xl grid md:grid-cols-3 gap-3">
         <div className="rounded border border-slate-700 p-3 bg-slate-900/70">
           <h2 className="font-semibold mb-2">Party</h2>
           {party.map((monster) => (
@@ -59,6 +65,19 @@ function App() {
           <h2 className="font-semibold mb-2">Gym Trainers</h2>
           <p className="text-sm text-slate-300">Defeated: {defeatedTrainers.length}/3</p>
           <p className="text-sm text-amber-300">Badges: {badges.length > 0 ? badges.join(', ') : 'None yet'}</p>
+        </div>
+
+        <div className="rounded border border-slate-700 p-3 bg-slate-900/70 space-y-2">
+          <h2 className="font-semibold">Town Services</h2>
+          <p className="text-sm text-emerald-300">₽ {money} · Potions {potions}</p>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <button className="bg-sky-700 p-2 rounded" onClick={buyPotion}>Shop: Buy Potion (₽20)</button>
+            <button className="bg-teal-700 p-2 rounded" onClick={healPartyAtPc}>PC Heal</button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <button className="bg-slate-700 p-2 rounded" onClick={saveGame}>Save (localStorage)</button>
+            <button className="bg-slate-700 p-2 rounded" onClick={loadGame}>Load Save</button>
+          </div>
         </div>
       </section>
 
@@ -87,7 +106,7 @@ function App() {
           {battle.phase === 'player_turn' && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <button className="bg-emerald-700 p-2 rounded" onClick={() => chooseBattleCommand('fight')}>Fight</button>
-              <button className="bg-cyan-700 p-2 rounded" onClick={() => chooseBattleCommand('item')}>Item</button>
+              <button className="bg-cyan-700 p-2 rounded" onClick={() => chooseBattleCommand('item')}>Item ({potions})</button>
               <button className="bg-indigo-700 p-2 rounded" onClick={() => chooseBattleCommand('catch')}>Catch</button>
               <button className="bg-rose-700 p-2 rounded" onClick={() => chooseBattleCommand('run')}>Run</button>
             </div>

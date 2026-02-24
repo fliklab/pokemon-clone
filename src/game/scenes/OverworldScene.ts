@@ -12,11 +12,15 @@ const trainerPositions: Record<string, { x: number; y: number }> = {
   'leader-nova': { x: 9, y: 7 },
 }
 
+const shopTile = { x: 2, y: 2 }
+const pcTile = { x: 3, y: 2 }
+
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private player!: Phaser.Physics.Arcade.Sprite
   private grassLayer?: Phaser.Tilemaps.TilemapLayer
   private wasInGrass = false
+  private lastServiceTick = 0
 
   constructor() {
     super('overworld')
@@ -44,6 +48,15 @@ export class OverworldScene extends Phaser.Scene {
     blockedLayer?.setCollisionByExclusion([-1, 0])
 
     this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
+
+    this.add.text((shopTile.x + 0.1) * TILE_SIZE * WORLD_SCALE, (shopTile.y + 0.2) * TILE_SIZE * WORLD_SCALE, 'SHOP', {
+      color: '#fbbf24',
+      fontSize: '11px',
+    })
+    this.add.text((pcTile.x + 0.15) * TILE_SIZE * WORLD_SCALE, (pcTile.y + 0.8) * TILE_SIZE * WORLD_SCALE, 'PC', {
+      color: '#38bdf8',
+      fontSize: '11px',
+    })
     this.player.setOrigin(0.5, 1)
     this.player.setScale(WORLD_SCALE)
     this.player.setDepth(10)
@@ -105,6 +118,20 @@ export class OverworldScene extends Phaser.Scene {
 
     if (trainer && !state.defeatedTrainers.includes(trainer.id)) {
       state.triggerTrainerBattle(trainer)
+    }
+
+    const onShop = tileX === shopTile.x && tileY === shopTile.y
+    const onPc = tileX === pcTile.x && tileY === pcTile.y
+    const canUseService = Date.now() - this.lastServiceTick > 500
+
+    if (canUseService && onShop) {
+      state.buyPotion()
+      this.lastServiceTick = Date.now()
+    }
+
+    if (canUseService && onPc) {
+      state.healPartyAtPc()
+      this.lastServiceTick = Date.now()
     }
 
     if (inGrass && !this.wasInGrass) {

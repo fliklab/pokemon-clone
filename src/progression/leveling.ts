@@ -55,15 +55,19 @@ export function createStarterMonster(): PartyMonster {
   }
 }
 
-export function createWildEnemy(): Battler {
+export function createWildEnemy(playerLevel = 5, badges = 0): Battler {
+  const variance = Math.floor(Math.random() * 3) - 1
+  const level = Math.max(3, playerLevel - 1 + badges + variance)
+  const baseHp = 20 + level * 2
+
   return {
     name: Math.random() > 0.5 ? 'Flameling' : 'Aquava',
-    level: 4,
-    hp: 28,
-    maxHp: 28,
-    attack: 11,
-    defense: 10,
-    speed: 10,
+    level,
+    hp: baseHp,
+    maxHp: baseHp,
+    attack: 8 + level,
+    defense: 7 + level,
+    speed: 7 + level,
     type: Math.random() > 0.5 ? 'fire' : 'water',
     status: 'none',
   }

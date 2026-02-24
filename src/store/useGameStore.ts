@@ -24,6 +24,8 @@ type DirectionalInput = {
   right: boolean
 }
 
+type PersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'>
+
 type GameState = {
   sceneReady: boolean
   playerTile: { x: number; y: number }
@@ -32,6 +34,8 @@ type GameState = {
   party: PartyMonster[]
   badges: string[]
   defeatedTrainers: string[]
+  money: number
+  potions: number
   virtualInput: DirectionalInput
   setSceneReady: (ready: boolean) => void
   setPlayerTile: (x: number, y: number) => void
@@ -39,8 +43,14 @@ type GameState = {
   triggerTrainerBattle: (trainer: TrainerBattle) => void
   chooseBattleCommand: (command: BattleCommand) => void
   setVirtualInput: (direction: keyof DirectionalInput, active: boolean) => void
+  healPartyAtPc: () => void
+  buyPotion: () => void
+  saveGame: () => void
+  loadGame: () => void
   endBattle: () => void
 }
+
+const STORAGE_KEY = 'pokemon-clone-save-v1'
 
 const trainerRoster: TrainerBattle[] = [
   {
@@ -67,18 +77,61 @@ const initialVirtualInput: DirectionalInput = { up: false, down: false, left: fa
 
 const initialParty = [createStarterMonster()]
 
-const initialBattleState = (): GameState['battle'] => ({
+const initialBattleState = (party: PartyMonster[]): GameState['battle'] => ({
   active: false,
   phase: 'idle',
-  player: initialParty[0],
-  enemy: createWildEnemy(),
+  player: party[0],
+  enemy: createWildEnemy(party[0].level, 0),
   message: 'Walk in grass to encounter a wild monster.',
   lastDamage: 0,
   turn: 0,
   trainerBattle: null,
 })
 
-function applyProgressionAfterWin(state: GameState): Pick<GameState, 'party' | 'badges'> {
+function getPersistedState(): PersistedState | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  if (typeof window.localStorage?.getItem !== 'function') {
+    return null
+  }
+
+  const raw = window.localStorage.getItem(STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
+
+  try {
+    return JSON.parse(raw) as PersistedState
+  } catch {
+    return null
+  }
+}
+
+function persistState(state: GameState) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (typeof window.localStorage?.setItem !== 'function') {
+    return
+  }
+
+  const payload: PersistedState = {
+    playerTile: state.playerTile,
+    lastEncounter: state.lastEncounter,
+    party: state.party,
+    badges: state.badges,
+    defeatedTrainers: state.defeatedTrainers,
+    money: state.money,
+    potions: state.potions,
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
+function applyProgressionAfterWin(state: GameState): Pick<GameState, 'party' | 'badges' | 'money'> {
   const [lead, ...rest] = state.party
   const trainerBattle = state.battle.trainerBattle
   const progression = grantBattleExp(lead, state.battle.enemy.level, Boolean(trainerBattle))
@@ -90,17 +143,35 @@ function applyProgressionAfterWin(state: GameState): Pick<GameState, 'party' | '
   return {
     party: [progression.monster, ...rest],
     badges,
+    money: state.money + (trainerBattle ? 45 : 18),
   }
 }
 
+function defaultState(): Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'> {
+  const saved = getPersistedState()
+  return saved ?? {
+    playerTile: { x: 0, y: 0 },
+    lastEncounter: null,
+    party: initialParty,
+    badges: [],
+    defeatedTrainers: [],
+    money: 120,
+    potions: 1,
+  }
+}
+
+const bootState = defaultState()
+
 export const useGameStore = create<GameState>((set, get) => ({
   sceneReady: false,
-  playerTile: { x: 0, y: 0 },
-  lastEncounter: null,
-  battle: initialBattleState(),
-  party: initialParty,
-  badges: [],
-  defeatedTrainers: [],
+  playerTile: bootState.playerTile,
+  lastEncounter: bootState.lastEncounter,
+  battle: initialBattleState(bootState.party),
+  party: bootState.party,
+  badges: bootState.badges,
+  defeatedTrainers: bootState.defeatedTrainers,
+  money: bootState.money,
+  potions: bootState.potions,
   virtualInput: initialVirtualInput,
   setSceneReady: (ready) => set({ sceneReady: ready }),
   setPlayerTile: (x, y) => set({ playerTile: { x, y } }),
@@ -112,13 +183,50 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     }))
   },
+  healPartyAtPc: () => {
+    set((state) => {
+      const healedParty = state.party.map((monster) => ({ ...monster, hp: monster.maxHp, status: 'none' as const }))
+      return {
+        party: healedParty,
+        battle: state.battle.active ? state.battle : { ...state.battle, player: healedParty[0] },
+      }
+    })
+  },
+  buyPotion: () => {
+    set((state) => {
+      if (state.money < 20) {
+        return state
+      }
+
+      return {
+        money: state.money - 20,
+        potions: state.potions + 1,
+      }
+    })
+  },
+  saveGame: () => {
+    persistState(get())
+  },
+  loadGame: () => {
+    const saved = getPersistedState()
+    if (!saved) {
+      return
+    }
+
+    set((state) => ({
+      ...state,
+      ...saved,
+      battle: initialBattleState(saved.party),
+      virtualInput: initialVirtualInput,
+    }))
+  },
   triggerEncounter: (x, y) => {
     if (get().battle.active) {
       return
     }
 
-    const enemy = createWildEnemy()
     const leadMonster = get().party[0]
+    const enemy = createWildEnemy(leadMonster.level, get().badges.length)
 
     set({
       lastEncounter: {
@@ -230,15 +338,26 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     if (command === 'item') {
-      const healed = Math.min(battle.player.maxHp, battle.player.hp + 8)
-      set({
+      if (get().potions <= 0) {
+        set({
+          battle: {
+            ...battle,
+            message: 'No potions left! Visit the shop.',
+          },
+        })
+        return
+      }
+
+      const healed = Math.min(battle.player.maxHp, battle.player.hp + 12)
+      set((state) => ({
+        potions: Math.max(0, state.potions - 1),
         battle: {
           ...battle,
           player: { ...battle.player, hp: healed },
           phase: 'enemy_turn',
           message: `${battle.player.name} recovered HP with a potion.`,
         },
-      })
+      }))
     }
 
     if (command === 'fight') {
@@ -282,11 +401,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       let party = get().party
       let badges = get().badges
       let defeatedTrainers = get().defeatedTrainers
+      let money = get().money
 
       if (phase === 'resolved') {
         const progression = applyProgressionAfterWin(get())
         party = progression.party
         badges = progression.badges
+        money = progression.money
 
         if (battle.trainerBattle && !defeatedTrainers.includes(battle.trainerBattle.id)) {
           defeatedTrainers = [...defeatedTrainers, battle.trainerBattle.id]
@@ -310,6 +431,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         party,
         badges,
         defeatedTrainers,
+        money,
       })
       return
     }
@@ -329,8 +451,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       })
     }
   },
-  endBattle: () => set({ battle: initialBattleState() }),
+  endBattle: () => set((state) => ({ battle: initialBattleState(state.party) })),
 }))
+
+useGameStore.subscribe((state) => {
+  persistState(state)
+})
 
 export function getGymTrainers(): TrainerBattle[] {
   return trainerRoster
