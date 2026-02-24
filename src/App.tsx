@@ -89,7 +89,7 @@ function App() {
           <p className="text-sm text-emerald-300">₽ {money} · Potions {potions}</p>
           <p className="text-xs text-slate-400">{ko.app.serviceHint}</p>
           <button
-            className="w-full bg-violet-700 active:bg-violet-600 p-3 rounded text-sm font-semibold"
+            className="w-full rounded bg-menuPurple p-3 text-sm font-semibold text-menuPurple-text hover:bg-menuPurple-hover active:bg-menuPurple-hover"
             onClick={() => openModal('menu')}
           >
             {ko.app.menu.open}
@@ -281,7 +281,11 @@ type MenuActionProps = {
 
 function MenuAction({ label, onClick, className, disabled = false }: MenuActionProps) {
   return (
-    <button className={`rounded bg-violet-700 active:bg-violet-600 p-3 font-semibold disabled:opacity-50 ${className ?? ''}`} onClick={onClick} disabled={disabled}>
+    <button
+      className={`rounded bg-menuPurpleSoft p-3 font-semibold text-menuPurpleSoft-text hover:bg-menuPurpleSoft-hover active:bg-menuPurpleSoft-hover disabled:opacity-50 ${className ?? ''}`}
+      onClick={onClick}
+      disabled={disabled}
+    >
       {label}
     </button>
   )
