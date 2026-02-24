@@ -7,9 +7,13 @@ import { useGameStore } from './store/useGameStore'
 
 type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | null
 
+const SHOP_TILE = { x: 2, y: 2 }
+const PC_TILE = { x: 3, y: 2 }
+
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
+  const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
   const sceneReady = useGameStore((state) => state.sceneReady)
   const playerTile = useGameStore((state) => state.playerTile)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
@@ -50,6 +54,11 @@ function App() {
 
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
   const closeModal = () => setActiveModal(null)
+
+  const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
+  const canOpenShop = playerTile.x === SHOP_TILE.x && playerTile.y === SHOP_TILE.y
+  const canOpenPc = playerTile.x === PC_TILE.x && playerTile.y === PC_TILE.y
+  const selectedPartyMonster = party.find((monster) => monster.id === selectedPartyId) ?? party[0]
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
@@ -106,20 +115,35 @@ function App() {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
           <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
-          <MenuAction label={ko.app.menu.shop} onClick={() => openModal('shop')} />
-          <MenuAction label={ko.app.menu.pc} onClick={() => openModal('pc')} />
+          <MenuAction label={ko.app.menu.shop} onClick={() => openModal('shop')} disabled={!canOpenShop} />
+          <MenuAction label={ko.app.menu.pc} onClick={() => openModal('pc')} disabled={!canOpenPc} />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
         </div>
       </BaseModal>
 
       <BaseModal open={activeModal === 'party'} onClose={closeModal} title={ko.app.modal.partyTitle}>
-        <div className="space-y-2 text-sm">
-          {party.map((monster) => (
-            <div key={monster.id} className="rounded border border-slate-700 p-2 bg-slate-800/70">
-              <p className="font-semibold">{monster.name} · Lv.{monster.level}</p>
-              <p className="text-slate-300">{ko.app.modal.hp(monster.hp, monster.maxHp)} · EXP {monster.exp}/{monster.nextLevelExp}</p>
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-slate-400">포획한 포켓몬: {party.length}마리</p>
+          <div className="max-h-44 overflow-y-auto space-y-2">
+            {party.map((monster) => (
+              <button
+                key={monster.id}
+                className={`w-full text-left rounded border p-2 ${selectedPartyMonster?.id === monster.id ? 'border-violet-400 bg-violet-900/30' : 'border-slate-700 bg-slate-800/70'}`}
+                onClick={() => setSelectedPartyId(monster.id)}
+              >
+                <p className="font-semibold">{monster.name} · Lv.{monster.level}</p>
+                <p className="text-slate-300">{ko.app.modal.hp(monster.hp, monster.maxHp)}</p>
+              </button>
+            ))}
+          </div>
+          {selectedPartyMonster && (
+            <div className="rounded border border-slate-700 p-2 bg-slate-900/70">
+              <p className="font-semibold">상세 정보</p>
+              <p>타입: {selectedPartyMonster.type}</p>
+              <p>공격 {selectedPartyMonster.attack} · 방어 {selectedPartyMonster.defense} · 스피드 {selectedPartyMonster.speed}</p>
+              <p>EXP {selectedPartyMonster.exp}/{selectedPartyMonster.nextLevelExp}</p>
             </div>
-          ))}
+          )}
         </div>
       </BaseModal>
 
@@ -140,10 +164,11 @@ function App() {
       <BaseModal open={activeModal === 'shop'} onClose={closeModal} title={ko.app.modal.shopTitle}>
         <div className="space-y-3 text-sm">
           <p className="text-emerald-300">{ko.app.modal.money(money)}</p>
+          {!canOpenShop && <p className="text-amber-300 text-xs">상점 타일(2,2)에서만 이용할 수 있습니다.</p>}
           <button
             className="w-full rounded bg-sky-700 active:bg-sky-600 p-3 font-semibold disabled:opacity-50"
             onClick={buyPotion}
-            disabled={money < 20}
+            disabled={money < 20 || !canOpenShop}
           >
             {ko.app.modal.buyPotion}
           </button>
@@ -152,9 +177,11 @@ function App() {
 
       <BaseModal open={activeModal === 'pc'} onClose={closeModal} title={ko.app.modal.pcTitle}>
         <div className="space-y-2 text-sm">
+          {!canOpenPc && <p className="text-amber-300 text-xs">PC 타일(3,2)에서만 이용할 수 있습니다.</p>}
           <button
-            className="w-full rounded bg-teal-700 active:bg-teal-600 p-3 font-semibold"
+            className="w-full rounded bg-teal-700 active:bg-teal-600 p-3 font-semibold disabled:opacity-50"
             onClick={healPartyAtPc}
+            disabled={!canOpenPc}
           >
             {ko.app.modal.healParty}
           </button>
@@ -212,7 +239,7 @@ function App() {
             </div>
           )}
 
-          {battle.phase !== 'player_turn' && (
+          {endedBattle && (
             <button className="bg-slate-700 p-2 rounded" onClick={endBattle}>{ko.app.battle.return}</button>
           )}
         </section>
@@ -249,11 +276,12 @@ type MenuActionProps = {
   label: string
   onClick: () => void
   className?: string
+  disabled?: boolean
 }
 
-function MenuAction({ label, onClick, className }: MenuActionProps) {
+function MenuAction({ label, onClick, className, disabled = false }: MenuActionProps) {
   return (
-    <button className={`rounded bg-violet-700 active:bg-violet-600 p-3 font-semibold ${className ?? ''}`} onClick={onClick}>
+    <button className={`rounded bg-violet-700 active:bg-violet-600 p-3 font-semibold disabled:opacity-50 ${className ?? ''}`} onClick={onClick} disabled={disabled}>
       {label}
     </button>
   )

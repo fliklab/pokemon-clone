@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyDamage, applyEndTurnStatus, calculateDamage } from '../battle/damage'
 import { calculateCatchChance, rollCatch } from '../battle/capture'
 import type { BattleCommand, BattleSnapshot, Battler } from '../battle/types'
-import { createStarterMonster, createWildEnemy, grantBattleExp, type PartyMonster } from '../progression/leveling'
+import { createStarterMonster, createWildEnemy, expForNextLevel, grantBattleExp, type PartyMonster } from '../progression/leveling'
 import { ko } from '../i18n/ko'
 
 type Encounter = {
@@ -52,6 +52,8 @@ type GameState = {
 }
 
 const STORAGE_KEY = 'pokemon-clone-save-v1'
+const SHOP_TILE = { x: 2, y: 2 }
+const PC_TILE = { x: 3, y: 2 }
 
 const trainerRoster: TrainerBattle[] = [
   {
@@ -148,6 +150,23 @@ function applyProgressionAfterWin(state: GameState): Pick<GameState, 'party' | '
   }
 }
 
+function toCaughtPartyMonster(enemy: Battler): PartyMonster {
+  return {
+    ...enemy,
+    id: `${enemy.name.toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    exp: 0,
+    nextLevelExp: expForNextLevel(enemy.level),
+  }
+}
+
+function canUseShop(state: GameState): boolean {
+  return state.playerTile.x === SHOP_TILE.x && state.playerTile.y === SHOP_TILE.y
+}
+
+function canUsePc(state: GameState): boolean {
+  return state.playerTile.x === PC_TILE.x && state.playerTile.y === PC_TILE.y
+}
+
 function defaultState(): Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'> {
   const saved = getPersistedState()
   return saved ?? {
@@ -186,6 +205,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   healPartyAtPc: () => {
     set((state) => {
+      if (!canUsePc(state)) {
+        return state
+      }
+
       const healedParty = state.party.map((monster) => ({ ...monster, hp: monster.maxHp, status: 'none' as const }))
       return {
         party: healedParty,
@@ -195,7 +218,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   buyPotion: () => {
     set((state) => {
-      if (state.money < 20) {
+      if (!canUseShop(state) || state.money < 20) {
         return state
       }
 
@@ -319,13 +342,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       const chance = calculateCatchChance(battle.enemy)
       const caught = rollCatch(chance)
       if (caught) {
-        set({
+        const caughtMonster = toCaughtPartyMonster(battle.enemy)
+        set((state) => ({
           battle: {
             ...battle,
             phase: 'caught',
             message: ko.store.caught(battle.enemy.name),
           },
-        })
+          party: [...state.party, caughtMonster],
+        }))
         return
       }
 

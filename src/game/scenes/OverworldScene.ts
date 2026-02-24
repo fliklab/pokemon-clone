@@ -119,6 +119,8 @@ export class OverworldScene extends Phaser.Scene {
 
     const state = useGameStore.getState()
 
+    state.setPlayerTile(tileX, tileY)
+
     const trainer = getGymTrainers().find((entry) => {
       const pos = trainerPositions[entry.id]
       return pos?.x === tileX && pos?.y === tileY
@@ -152,8 +154,6 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     this.wasInGrass = inGrass
-
-    state.setPlayerTile(tileX, tileY)
   }
 
   private updateCameraZoom() {
