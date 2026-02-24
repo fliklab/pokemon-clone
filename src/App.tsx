@@ -77,7 +77,7 @@ function App() {
       </section>
 
       {battle.active && (
-        <section className="w-full max-w-5xl bg-slate-900 border border-slate-700 rounded p-4 space-y-3">
+        <section className="fixed md:static bottom-3 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-[calc(100%-1.5rem)] md:w-full max-w-sm md:max-w-5xl bg-slate-900/95 border border-slate-700 rounded p-4 space-y-3 shadow-2xl">
           <div className="flex justify-between text-sm">
             <p>{battle.player.name} HP: {battle.player.hp}/{battle.player.maxHp}</p>
             <p>{battle.enemy.name} HP: {battle.enemy.hp}/{battle.enemy.maxHp}</p>
