@@ -4,6 +4,9 @@ import { useGameStore } from '../../store/useGameStore'
 export class BattleScene extends Phaser.Scene {
   private unsub?: () => void
   private endTimer?: Phaser.Time.TimerEvent
+  private playerSprite?: Phaser.GameObjects.Text
+  private enemySprite?: Phaser.GameObjects.Text
+  private phaseCursor = ''
 
   constructor() {
     super('battle')
@@ -15,8 +18,8 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(400, 350, 250, 100, 0x334155)
     this.add.rectangle(650, 130, 180, 80, 0x475569)
 
-    this.add.text(300, 320, '🧢', { fontSize: '48px' })
-    this.add.text(630, 95, '🐾', { fontSize: '42px' })
+    this.playerSprite = this.add.text(300, 320, '🧢', { fontSize: '48px' })
+    this.enemySprite = this.add.text(630, 95, '🐾', { fontSize: '42px' })
 
     this.add.text(40, 30, 'Battle Scene', { color: '#e2e8f0', fontSize: '24px' })
 
@@ -35,6 +38,7 @@ export class BattleScene extends Phaser.Scene {
       }
 
       messageText.setText(battle.message)
+      this.applyPlaceholders(battle.phase)
 
       const ended = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
       if (ended && !this.endTimer) {
@@ -56,6 +60,53 @@ export class BattleScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.shutdown()
     })
+  }
+
+  private applyPlaceholders(phase: string) {
+    if (this.phaseCursor === phase) {
+      return
+    }
+
+    this.phaseCursor = phase
+
+    if (phase === 'enemy_turn') {
+      this.playTone(170)
+      this.tweens.add({ targets: this.enemySprite, x: '+=14', yoyo: true, duration: 110, repeat: 1 })
+      this.cameras.main.flash(100, 255, 120, 120)
+      return
+    }
+
+    if (phase === 'resolved' || phase === 'caught') {
+      this.playTone(420)
+      this.tweens.add({ targets: this.playerSprite, y: '-=8', yoyo: true, duration: 140, repeat: 2 })
+      this.cameras.main.flash(140, 120, 255, 160)
+      return
+    }
+
+    if (phase === 'lost') {
+      this.playTone(120)
+      this.cameras.main.shake(220, 0.007)
+    }
+  }
+
+  private playTone(frequency: number) {
+    const audioCtx = this.sound.context
+    if (!audioCtx) {
+      return
+    }
+
+    const oscillator = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+
+    oscillator.type = 'square'
+    oscillator.frequency.value = frequency
+    gain.gain.value = 0.02
+
+    oscillator.connect(gain)
+    gain.connect(audioCtx.destination)
+
+    oscillator.start()
+    oscillator.stop(audioCtx.currentTime + 0.08)
   }
 
   shutdown() {
