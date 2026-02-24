@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { OverworldScene } from './scenes/OverworldScene'
+import { BattleScene } from './scenes/BattleScene'
 
 class BootScene extends Phaser.Scene {
   private readonly onReady: () => void
@@ -17,6 +18,7 @@ class BootScene extends Phaser.Scene {
 
 export function createGame(parent: string | HTMLElement, onReady: () => void) {
   const overworldScene = new OverworldScene()
+  const battleScene = new BattleScene()
 
   return new Phaser.Game({
     type: Phaser.AUTO,
@@ -32,6 +34,6 @@ export function createGame(parent: string | HTMLElement, onReady: () => void) {
         debug: false,
       },
     },
-    scene: [new BootScene(onReady), overworldScene],
+    scene: [new BootScene(onReady), overworldScene, battleScene],
   })
 }

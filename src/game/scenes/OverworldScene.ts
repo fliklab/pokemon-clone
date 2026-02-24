@@ -80,13 +80,20 @@ export class OverworldScene extends Phaser.Scene {
     const tileY = Math.floor(this.player.y / (TILE_SIZE * SCALE))
     const inGrass = this.grassLayer?.hasTileAt(tileX, tileY) ?? false
 
+    const state = useGameStore.getState()
+
     if (inGrass && !this.wasInGrass) {
-      useGameStore.getState().triggerEncounter(tileX, tileY)
+      state.triggerEncounter(tileX, tileY)
+    }
+
+    if (state.battle.active) {
+      this.scene.start('battle')
+      return
     }
 
     this.wasInGrass = inGrass
 
-    useGameStore.getState().setPlayerTile(tileX, tileY)
+    state.setPlayerTile(tileX, tileY)
   }
 
   private createTilesTexture() {
