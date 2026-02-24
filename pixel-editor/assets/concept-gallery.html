@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pokémon Clone Concept Gallery</title>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171b2e;
+      --card: #202641;
+      --line: #323a63;
+      --text: #ecf0ff;
+      --muted: #a8b3db;
+      --accent: #7bd1ff;
+      --accent-2: #9bffb0;
+      --danger: #ff7b93;
+      --shadow: 0 10px 28px rgba(0,0,0,.35);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(1200px 700px at 20% -10%, #202958 0%, transparent 60%),
+        radial-gradient(900px 600px at 110% 10%, #2f2e68 0%, transparent 50%),
+        var(--bg);
+      font-family: "Pretendard", "Noto Sans KR", system-ui, -apple-system, sans-serif;
+    }
+
+    .wrap {
+      width: min(1200px, calc(100% - 24px));
+      margin: 20px auto 28px;
+      display: grid;
+      gap: 12px;
+      grid-template-columns: 300px 300px 1fr;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      min-height: 76vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel h2 {
+      margin: 0;
+      padding: 14px 14px 10px;
+      font-size: 15px;
+      border-bottom: 1px solid var(--line);
+      letter-spacing: .3px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .toolbar input {
+      width: 100%;
+      background: #0f1326;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      outline: none;
+      font-size: 13px;
+    }
+
+    .list {
+      padding: 10px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .item {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: rgba(255,255,255,.02);
+      cursor: pointer;
+      transition: .12s ease;
+    }
+
+    .item:hover { transform: translateY(-1px); border-color: #46508d; }
+    .item.selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(123,209,255,.3); }
+
+    .thumb {
+      width: 52px; height: 52px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.2);
+      image-rendering: pixelated;
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      font-size: 22px;
+      font-weight: 700;
+      color: #0d1430;
+      text-shadow: 0 1px 0 rgba(255,255,255,.5);
+    }
+
+    .meta { min-width: 0; }
+    .name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tags { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .preview {
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+    }
+
+    .stage {
+      min-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      position: relative;
+      overflow: hidden;
+      background: #11162c;
+      display: grid;
+      place-items: center;
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-size: 32px 32px;
+      background-image:
+        linear-gradient(to right, rgba(255,255,255,.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,.06) 1px, transparent 1px);
+      pointer-events: none;
+      opacity: .5;
+      mix-blend-mode: soft-light;
+    }
+
+    .monster {
+      position: absolute;
+      width: 180px;
+      height: 180px;
+      border-radius: 20px;
+      border: 2px solid rgba(255,255,255,.42);
+      display: grid;
+      place-items: center;
+      font-size: 70px;
+      transform: translateY(20px);
+      backdrop-filter: blur(1px);
+      box-shadow: 0 12px 30px rgba(0,0,0,.35), inset 0 0 30px rgba(255,255,255,.08);
+      user-select: none;
+    }
+
+    .stage-label {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #d6defc;
+      background: rgba(8,11,25,.6);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(4px);
+    }
+
+    .info {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255,255,255,.02);
+      padding: 12px;
+    }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      color: #c7d1f8;
+      background: rgba(255,255,255,.03);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 2px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #1a2140;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button:hover { border-color: #5f6db9; }
+
+    @media (max-width: 1024px) {
+      .wrap { grid-template-columns: 1fr; }
+      .panel { min-height: auto; }
+      .stage { min-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="panel" aria-label="타일 리스트">
+      <h2>🧱 타일 리스트</h2>
+      <div class="toolbar"><input id="tileSearch" placeholder="타일 이름/태그 검색" /></div>
+      <div id="tileList" class="list"></div>
+    </section>
+
+    <section class="panel" aria-label="몬스터 리스트">
+      <h2>👾 몬스터 리스트</h2>
+      <div class="toolbar"><input id="monsterSearch" placeholder="몬스터 이름/속성 검색" /></div>
+      <div id="monsterList" class="list"></div>
+    </section>
+
+    <section class="panel" aria-label="조합 미리보기">
+      <h2>🎨 조합 미리보기</h2>
+      <div class="preview">
+        <div id="stage" class="stage">
+          <div class="stage-label" id="stageLabel">Map: - / Monster: -</div>
+          <div class="grid-overlay"></div>
+          <div id="monsterSprite" class="monster" hidden>?</div>
+        </div>
+
+        <div class="info">
+          <strong id="comboTitle">타일 + 몬스터를 선택하세요</strong>
+          <div class="chips" id="comboChips"></div>
+          <div class="controls">
+            <button id="randomBtn">랜덤 조합</button>
+            <button id="downloadBtn">캡처 PNG 다운로드</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const tiles = [
+      { id: 'grass', name: '초원 타일', tags: ['자연', '기본'], palette: ['#82e089', '#43b049'], emoji: '🌿' },
+      { id: 'lava', name: '화산 타일', tags: ['불', '위험'], palette: ['#ffb36b', '#dd3d2d'], emoji: '🌋' },
+      { id: 'snow', name: '설원 타일', tags: ['얼음', '밝음'], palette: ['#dbf2ff', '#7fc0f5'], emoji: '❄️' },
+      { id: 'cave', name: '동굴 타일', tags: ['암석', '어둠'], palette: ['#7a7297', '#2f2d43'], emoji: '🪨' },
+      { id: 'city', name: '네온 시티 타일', tags: ['도시', '전기'], palette: ['#8df4ff', '#3b53ff'], emoji: '🌃' },
+      { id: 'swamp', name: '늪지 타일', tags: ['독', '습지'], palette: ['#9ada87', '#3f6f38'], emoji: '🧪' }
+    ];
+
+    const monsters = [
+      { id: 'flameling', name: '플레임링', types: ['불'], emoji: '🦊', color: '#ff8b5e' },
+      { id: 'aquabub', name: '아쿠버브', types: ['물'], emoji: '🐟', color: '#6bc7ff' },
+      { id: 'voltimp', name: '볼트임프', types: ['전기'], emoji: '🐭', color: '#ffe45c' },
+      { id: 'mossaur', name: '모사우르', types: ['풀', '암석'], emoji: '🦕', color: '#8fd77d' },
+      { id: 'shadeowl', name: '셰이드아울', types: ['어둠', '비행'], emoji: '🦉', color: '#a198d8' },
+      { id: 'frostkit', name: '프로스트킷', types: ['얼음'], emoji: '🐱', color: '#a7ecff' }
+    ];
+
+    let selectedTile = tiles[0];
+    let selectedMonster = monsters[0];
+
+    const tileList = document.getElementById('tileList');
+    const monsterList = document.getElementById('monsterList');
+    const stage = document.getElementById('stage');
+    const monsterSprite = document.getElementById('monsterSprite');
+    const comboTitle = document.getElementById('comboTitle');
+    const comboChips = document.getElementById('comboChips');
+    const stageLabel = document.getElementById('stageLabel');
+
+    function tileBackground(tile) {
+      return `linear-gradient(135deg, ${tile.palette[0]} 0%, ${tile.palette[1]} 100%)`;
+    }
+
+    function renderTileList(keyword = '') {
+      const q = keyword.trim().toLowerCase();
+      tileList.innerHTML = '';
+      tiles
+        .filter(t => `${t.name} ${t.tags.join(' ')}`.toLowerCase().includes(q))
+        .forEach(tile => {
+          const el = document.createElement('button');
+          el.className = `item ${selectedTile.id === tile.id ? 'selected' : ''}`;
+          el.innerHTML = `
+            <div class="thumb" style="background:${tileBackground(tile)}">${tile.emoji}</div>
+            <div class="meta">
+              <div class="name">${tile.name}</div>
+              <div class="tags">${tile.tags.join(' · ')}</div>
+            </div>`;
+          el.onclick = () => { selectedTile = tile; update(); };
+          tileList.appendChild(el);
+        });
+    }
+
+    function renderMonsterList(keyword = '') {
+      const q = keyword.trim().toLowerCase();
+      monsterList.innerHTML = '';
+      monsters
+        .filter(m => `${m.name} ${m.types.join(' ')}`.toLowerCase().includes(q))
+        .forEach(mon => {
+          const el = document.createElement('button');
+          el.className = `item ${selectedMonster.id === mon.id ? 'selected' : ''}`;
+          el.innerHTML = `
+            <div class="thumb" style="background:linear-gradient(135deg, ${mon.color}, #ffffff)">${mon.emoji}</div>
+            <div class="meta">
+              <div class="name">${mon.name}</div>
+              <div class="tags">${mon.types.join(' · ')}</div>
+            </div>`;
+          el.onclick = () => { selectedMonster = mon; update(); };
+          monsterList.appendChild(el);
+        });
+    }
+
+    function update() {
+      stage.style.background = `${tileBackground(selectedTile)}`;
+      monsterSprite.hidden = false;
+      monsterSprite.textContent = selectedMonster.emoji;
+      monsterSprite.style.background = `radial-gradient(circle at 30% 25%, #fff8, transparent 45%), linear-gradient(160deg, ${selectedMonster.color} 0%, #ffffff22 100%)`;
+      comboTitle.textContent = `${selectedTile.name} × ${selectedMonster.name}`;
+      stageLabel.textContent = `Map: ${selectedTile.name} / Monster: ${selectedMonster.name}`;
+
+      comboChips.innerHTML = '';
+      [
+        ...selectedTile.tags.map(t => `타일:${t}`),
+        ...selectedMonster.types.map(t => `몬스터:${t}`)
+      ].forEach(tag => {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = tag;
+        comboChips.appendChild(chip);
+      });
+
+      renderTileList(document.getElementById('tileSearch').value);
+      renderMonsterList(document.getElementById('monsterSearch').value);
+    }
+
+    document.getElementById('tileSearch').addEventListener('input', (e) => renderTileList(e.target.value));
+    document.getElementById('monsterSearch').addEventListener('input', (e) => renderMonsterList(e.target.value));
+
+    document.getElementById('randomBtn').addEventListener('click', () => {
+      selectedTile = tiles[Math.floor(Math.random() * tiles.length)];
+      selectedMonster = monsters[Math.floor(Math.random() * monsters.length)];
+      update();
+    });
+
+    document.getElementById('downloadBtn').addEventListener('click', async () => {
+      if (!('html2canvas' in window)) {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+        script.onload = capture;
+        document.head.appendChild(script);
+      } else capture();
+    });
+
+    async function capture() {
+      const canvas = await html2canvas(stage, { backgroundColor: null, scale: 2 });
+      const a = document.createElement('a');
+      a.download = `combo-${selectedTile.id}-${selectedMonster.id}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    }
+
+    update();
+  </script>
+</body>
+</html>
