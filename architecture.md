@@ -53,6 +53,7 @@ src/
     actions.ts
 
   ui/
+    emoji-renderer.ts      # 에셋 키를 emoji/pixel-art로 매핑하는 렌더러
     hud/
     menus/
     dialog/
@@ -108,25 +109,61 @@ src/
 - 호환성: `saveVersion` 필드로 마이그레이션 분기
 - 안정성: 저장 직렬화 실패 시 기존 세이브를 보존
 
-## 7. Testing Strategy
+## 7. Asset Rendering
+
+이미지 에셋 준비 전 단계에서 `emoji`를 임시 렌더링 자원으로 사용하되, 나중에 픽셀아트로 쉽게 교체할 수 있도록 렌더링 진입점을 분리한다.
+
+### 7.1 EmojiAssetRenderer
+- `EmojiAssetRenderer`는 도메인에서 사용하는 `assetKey`를 받아 문자열(emoji 또는 pixel-art key)로 변환한다.
+- 내부적으로 `emojiMap`을 사용해 `assetType`별 기본값을 제공한다.
+- `assetKey`가 비어 있거나 매핑이 없는 경우 `assetType` fallback을 적용한다.
+
+### 7.2 Runtime Toggle
+- `config.emojiMode`가 `true`면 emoji를 반환한다.
+- `config.emojiMode`가 `false`면 `pixelArtResolver` hook으로 전달해 픽셀아트 키를 반환한다.
+- hook 미주입 시 최소 동작 보장을 위해 `assetKey` 자체를 반환한다.
+
+### 7.3 Example Snippet
+
+```ts
+import { EmojiAssetRenderer } from './src/ui/emoji-renderer';
+
+const renderer = new EmojiAssetRenderer({
+  emojiMode: true,
+  emojiMap: {
+    monster: '🐾',
+    trainer: '🧢',
+    item: '🧪',
+    move: '✨',
+    unknown: '❔',
+  },
+  pixelArtResolver: (assetKey) => `pixel:${assetKey}`,
+});
+
+renderer.render('monster', 'pikachu'); // "🐾" (emojiMode=true)
+```
+
+## 8. Testing Strategy
 - **Unit**
   - 데미지/포획/행동순서 공식
   - 레벨업/기술 습득 규칙
+  - `EmojiAssetRenderer`의 fallback/모드 전환/pixel hook 동작
 - **Integration**
   - 전투 1회전 흐름(커맨드 입력 → 판정 → 결과 반영)
   - 저장/불러오기 왕복 테스트
 - **Smoke**
   - 시작 후 5분 플레이(이동/인카운터/전투/회복/세이브)
 
-## 8. Observability & Debug (Dev)
+## 9. Observability & Debug (Dev)
 - 전투 로그(턴, 명중 여부, 데미지 값) 출력
 - 개발자용 디버그 패널(인카운터 강제, HP 조정, 아이템 지급)
 - 치명 에러 발생 시 최소한의 복구 UI(타이틀 복귀)
 
-## 9. Future Extension Points
+## 10. Future Extension Points
 - 온라인 대전용 `battle-transport` 추상화 계층
 - AI 트레이너 행동 정책 모듈화
 - 도감/퀘스트/스토리 이벤트 시스템 플러그인 구조
+- `EmojiAssetRenderer`를 `AssetRenderer` 인터페이스 기반으로 교체해 픽셀아트/스프라이트시트 렌더러를 플러그인처럼 추가
 
 ---
 이 문서는 MVP 구현 기준의 기준 아키텍처이며, 구현 진행에 따라 모듈 경계는 유지하되 내부 구조는 점진적으로 조정한다.
