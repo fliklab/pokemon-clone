@@ -5,9 +5,12 @@ import { useGameStore } from '../../store/useGameStore'
 export class BattleScene extends Phaser.Scene {
   private unsub?: () => void
   private endTimer?: Phaser.Time.TimerEvent
+  private typingTimer?: Phaser.Time.TimerEvent
   private playerSprite?: Phaser.GameObjects.Text
   private enemySprite?: Phaser.GameObjects.Text
+  private messageText?: Phaser.GameObjects.Text
   private phaseCursor = ''
+  private currentMessage = ''
 
   constructor() {
     super('battle')
@@ -32,11 +35,13 @@ export class BattleScene extends Phaser.Scene {
     const playerHpFill = this.add.rectangle(170, 314, 180, 12, 0x22c55e).setOrigin(0, 0.5)
     const enemyHpFill = this.add.rectangle(560, 74, 180, 12, 0x22c55e).setOrigin(0, 0.5)
 
-    const messageText = this.add.text(40, 420, '', {
+    this.messageText = this.add.text(40, 420, '', {
       color: '#f8fafc',
       fontSize: '16px',
       wordWrap: { width: 720 },
     })
+
+    this.playBattleStartWarningMusic()
 
     const sync = () => {
       const state = useGameStore.getState()
@@ -46,7 +51,7 @@ export class BattleScene extends Phaser.Scene {
         return
       }
 
-      messageText.setText(battle.message)
+      this.updateTypewriter(battle.message)
       playerHpLabel.setText(`${battle.player.name} HP ${battle.player.hp}/${battle.player.maxHp}`)
       enemyHpLabel.setText(`${battle.enemy.name} HP ${battle.enemy.hp}/${battle.enemy.maxHp}`)
 
@@ -81,6 +86,37 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
+  private updateTypewriter(nextMessage: string) {
+    if (!this.messageText) {
+      return
+    }
+
+    if (this.currentMessage === nextMessage) {
+      return
+    }
+
+    this.currentMessage = nextMessage
+    this.typingTimer?.remove(false)
+    this.typingTimer = undefined
+    this.messageText.setText('')
+
+    const chars = Array.from(nextMessage)
+    if (chars.length === 0) {
+      return
+    }
+
+    let index = 0
+    this.typingTimer = this.time.addEvent({
+      delay: 28,
+      repeat: chars.length - 1,
+      callback: () => {
+        index += 1
+        this.messageText?.setText(chars.slice(0, index).join(''))
+      },
+      callbackScope: this,
+    })
+  }
+
   private applyPlaceholders(phase: string) {
     if (this.phaseCursor === phase) {
       return
@@ -106,6 +142,31 @@ export class BattleScene extends Phaser.Scene {
       this.playTone(120)
       this.cameras.main.shake(220, 0.007)
     }
+  }
+
+  private playBattleStartWarningMusic() {
+    const manager = this.sound as { context?: AudioContext }
+    const audioCtx = manager.context
+    if (!audioCtx) {
+      return
+    }
+
+    const now = audioCtx.currentTime
+    const gain = audioCtx.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.035, now + 0.08)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9)
+    gain.connect(audioCtx.destination)
+
+    const notes = [740, 660, 820, 620]
+    notes.forEach((frequency, idx) => {
+      const osc = audioCtx.createOscillator()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(frequency, now + idx * 0.18)
+      osc.connect(gain)
+      osc.start(now + idx * 0.18)
+      osc.stop(now + idx * 0.18 + 0.16)
+    })
   }
 
   private playTone(frequency: number) {
@@ -134,5 +195,8 @@ export class BattleScene extends Phaser.Scene {
     this.unsub = undefined
     this.endTimer?.remove(false)
     this.endTimer = undefined
+    this.typingTimer?.remove(false)
+    this.typingTimer = undefined
+    this.currentMessage = ''
   }
 }
