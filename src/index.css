@@ -6,6 +6,12 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
-body {
-  margin: 0;
+@layer base {
+  body {
+    @apply m-0 bg-slate-950 text-white antialiased;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
 }
