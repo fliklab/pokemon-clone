@@ -1,1 +1,16 @@
-{"projectId":"prj_KSNBXhaRHesC03EDreyTTfAlONiP","orgId":"team_e7vYjnjaBPh3ruX8xfJhxm0a","projectName":"pokemon-clone"}
+{
+  "projectId": "prj_KSNBXhaRHesC03EDreyTTfAlONiP",
+  "orgId": "team_e7vYjnjaBPh3ruX8xfJhxm0a",
+  "projectName": "pokemon-clone",
+  "settings": {
+    "createdAt": 1771962323881,
+    "framework": null,
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}
