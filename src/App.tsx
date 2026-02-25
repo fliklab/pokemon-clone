@@ -69,19 +69,48 @@ function App() {
   }, [lastEncounter])
 
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
-  const logOverworldSceneState = useCallback((reason: string) => {
+  const logOverworldSceneState = useCallback((reason: string, extra?: Record<string, unknown>) => {
     const game = gameRef.current
-    const scene = game?.scene
+    const sceneManager = game?.scene
 
-    console.debug('[oak-intro]', reason, {
+    const sceneStates = sceneManager
+      ? sceneManager.getScenes(false).map((scene) => ({
+        key: scene.scene.key,
+        active: scene.scene.isActive(),
+        visible: scene.scene.isVisible(),
+        paused: scene.scene.isPaused(),
+        sleeping: scene.scene.isSleeping(),
+      }))
+      : []
+
+    const rendererInfo = game
+      ? {
+        type: game.config.renderType,
+        width: game.renderer.width,
+        height: game.renderer.height,
+      }
+      : null
+
+    const payload = {
+      ts: new Date().toISOString(),
+      reason,
       activeModal,
       hasGame: Boolean(game),
-      hasOverworld: Boolean(scene?.keys?.overworld),
-      isOverworldActive: scene?.isActive('overworld') ?? false,
-      isOverworldVisible: scene?.isVisible('overworld') ?? false,
-      isOverworldSleeping: scene?.isSleeping('overworld') ?? false,
-      isOverworldPaused: scene?.isPaused('overworld') ?? false,
-    })
+      hasOverworld: Boolean(sceneManager?.keys?.overworld),
+      isOverworldActive: sceneManager?.isActive('overworld') ?? false,
+      isOverworldVisible: sceneManager?.isVisible('overworld') ?? false,
+      isOverworldSleeping: sceneManager?.isSleeping('overworld') ?? false,
+      isOverworldPaused: sceneManager?.isPaused('overworld') ?? false,
+      sceneStates,
+      renderer: rendererInfo,
+      ...extra,
+    }
+
+    const traceStore = (window as Window & { __oakFlowTrace?: unknown[] }).__oakFlowTrace ?? []
+    traceStore.push(payload)
+    ;(window as Window & { __oakFlowTrace?: unknown[] }).__oakFlowTrace = traceStore
+
+    console.debug('[oak-intro][trace]', JSON.stringify(payload))
   }, [activeModal])
 
   const closeModal = useCallback(() => {
@@ -102,34 +131,52 @@ function App() {
       return
     }
 
+    const forceRenderFrame = (phase: string) => {
+      const step = (game as Phaser.Game & { step?: (time: number, delta: number) => void }).step
+      if (typeof step === 'function') {
+        step.call(game, performance.now(), 16.6667)
+        logOverworldSceneState(`forced game.step render (${phase})`)
+      } else {
+        logOverworldSceneState(`game.step unavailable (${phase})`)
+      }
+    }
+
     const restoreOverworldScene = (attempt: 'initial' | 'raf') => {
       const sceneManager = game.scene
       const hasOverworld = Boolean(sceneManager.keys?.overworld)
 
+      logOverworldSceneState(`restore attempt ${attempt}`, {
+        hasBattle: Boolean(sceneManager.keys?.battle),
+        isBattleActive: sceneManager.isActive('battle'),
+      })
+
+      if (sceneManager.isActive('battle')) {
+        sceneManager.stop('battle')
+        logOverworldSceneState(`battle scene stopped (${attempt})`)
+      }
+
       if (!hasOverworld) {
         logOverworldSceneState(`overworld scene missing (${attempt}), starting fresh`)
         sceneManager.start('overworld')
-        return
-      }
-
-      if (!sceneManager.isActive('overworld')) {
-        logOverworldSceneState(`overworld scene inactive (${attempt}), starting scene`)
-        sceneManager.start('overworld')
       } else {
-        logOverworldSceneState(`overworld scene active (${attempt}), resume/wake scene`)
+        sceneManager.run('overworld')
         sceneManager.resume('overworld')
         sceneManager.wake('overworld')
+        logOverworldSceneState(`overworld scene run/resume/wake (${attempt})`)
       }
 
       const overworldScene = sceneManager.getScene('overworld') as Phaser.Scene
       overworldScene.scene.setVisible(true)
       overworldScene.scene.setActive(true)
+      overworldScene.scene.bringToTop()
       overworldScene.cameras?.main?.setVisible(true)
 
       game.loop.wake()
       game.scale.refresh()
       const renderer = game.renderer as { resize?: (width: number, height: number) => void }
       renderer.resize?.(game.scale.gameSize.width, game.scale.gameSize.height)
+
+      forceRenderFrame(attempt)
     }
 
     restoreOverworldScene('initial')
@@ -137,6 +184,10 @@ function App() {
 
     window.requestAnimationFrame(() => {
       restoreOverworldScene('raf')
+      window.requestAnimationFrame(() => {
+        forceRenderFrame('double-raf')
+        logOverworldSceneState('oak intro close flow complete')
+      })
       focusGameCanvas()
     })
   }, [focusGameCanvas, logOverworldSceneState, setVirtualInput])
@@ -145,6 +196,11 @@ function App() {
     logOverworldSceneState('closing oak intro modal')
     markOakIntroSeen()
     closeModal()
+
+    window.setTimeout(() => {
+      const traceStore = (window as Window & { __oakFlowTrace?: unknown[] }).__oakFlowTrace ?? []
+      console.info('[oak-intro][trace:json]', JSON.stringify(traceStore))
+    }, 0)
   }, [closeModal, logOverworldSceneState, markOakIntroSeen])
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
