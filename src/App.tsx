@@ -12,6 +12,7 @@ type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const gameCanvasContainerRef = useRef<HTMLDivElement | null>(null)
+  const previousModalRef = useRef<ModalType>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
@@ -142,6 +143,22 @@ function App() {
       window.cancelAnimationFrame(frame)
     }
   }, [interactionNonce, nearbyNpc, oakIntroSeen])
+
+  useEffect(() => {
+    const previousModal = previousModalRef.current
+    const enteringOakIntro = activeModal === 'oak-intro' && previousModal !== 'oak-intro'
+    const leavingOakIntro = previousModal === 'oak-intro' && activeModal !== 'oak-intro'
+
+    if (enteringOakIntro && gameRef.current?.scene.isActive('overworld')) {
+      gameRef.current.scene.pause('overworld')
+    }
+
+    if (leavingOakIntro) {
+      returnToOverworldInput()
+    }
+
+    previousModalRef.current = activeModal
+  }, [activeModal, returnToOverworldInput])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
@@ -336,7 +353,6 @@ function App() {
             onClick={() => {
               markOakIntroSeen()
               closeModal()
-              returnToOverworldInput()
             }}
           >
             {ko.app.modal.startAdventure}
