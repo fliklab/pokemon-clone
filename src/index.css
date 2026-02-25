@@ -21,7 +21,19 @@
     user-select: none;
   }
 
+  #game-root {
+    @apply w-full h-full relative;
+    isolation: isolate;
+  }
+
   #game-root canvas {
     touch-action: none;
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    position: relative !important;
+    z-index: 1 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
 }

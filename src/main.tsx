@@ -34,3 +34,6 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+window.requestAnimationFrame(hideSplash)
+window.setTimeout(hideSplash, 2500)
