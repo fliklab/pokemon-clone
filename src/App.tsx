@@ -107,10 +107,16 @@ function App() {
   const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
   const debugRouteMode: DebugRouteMode = window.__debugRouteMode ?? null
   const debugModeEnabled = useMemo(() => {
-    const debugQuery = new URLSearchParams(window.location.search).get('debugMode') === 'true'
-    const debugStorage = window.localStorage.getItem('debugMode') === 'true'
+    const parseDebugFlag = (value: string | null) => {
+      const normalized = value?.trim().toLowerCase() ?? ''
+      return normalized === 'true' || normalized === '1' || normalized === 'on'
+    }
 
-    return debugQuery || debugStorage
+    const params = new URLSearchParams(window.location.search)
+    const queryValue = params.get('debugMode') ?? params.get('debug')
+    const storageValue = window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
+
+    return parseDebugFlag(queryValue) || parseDebugFlag(storageValue)
   }, [])
 
   const focusGameCanvas = useCallback(() => {
@@ -244,6 +250,19 @@ function App() {
   }, [collectSceneSnapshot, getRendererLabel])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const queryValue = params.get('debugMode') ?? params.get('debug')
+    const storageValue = window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
+
+    console.info('[debug-mode]', {
+      enabled: debugModeEnabled,
+      query: queryValue,
+      storage: storageValue,
+      href: window.location.href,
+    })
+  }, [debugModeEnabled])
+
+  useEffect(() => {
     if (debugRouteMode !== 'battle' || !sceneReady || battle.active) {
       return
     }
@@ -326,7 +345,7 @@ function App() {
           {debugModeEnabled && (
             <a
               href="/debug.html"
-              className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-600 px-3 py-1.5 text-xs md:text-sm font-semibold hover:bg-slate-700 active:bg-slate-700"
+              className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 opacity-100 visible md:text-sm hover:bg-slate-700 active:bg-slate-700"
               aria-label="디버그 페이지 열기"
             >
               <span aria-hidden="true">🔧</span>
