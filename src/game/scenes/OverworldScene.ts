@@ -244,12 +244,12 @@ export class OverworldScene extends Phaser.Scene {
 
   create() {
     try {
-      if (!this.scene || !this.scene.manager) {
+      if (!this.scene?.manager) {
         console.error('[overworld] create aborted: scene manager is unavailable')
         return
       }
 
-      if (!this.make || !this.cache?.tilemap || !this.cameras?.main || !this.physics) {
+      if (!this.make || !this.cache?.tilemap || !this.cameras?.main || !this.physics?.add) {
         this.startFallbackScene('[overworld] create prerequisites are unavailable')
         return
       }
@@ -356,6 +356,11 @@ export class OverworldScene extends Phaser.Scene {
         (startTile.y + 1) * TILE_SIZE * WORLD_SCALE,
         'player-down-0',
       )
+
+      if (!this.player?.body || !this.cameras?.main) {
+        this.startFallbackScene('[overworld] player/camera initialization failed')
+        return
+      }
 
       const shopNpc = this.findNpcTile(TILE_NPC_SHOP)
       const pcNpc = this.findNpcTile(TILE_NPC_PC)

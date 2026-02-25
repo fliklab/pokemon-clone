@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { PreloaderScene } from './scenes/PreloaderScene'
 import { OverworldScene } from './scenes/OverworldScene'
 import { BattleScene } from './scenes/BattleScene'
 import { FallbackDummyScene } from './scenes/FallbackDummyScene'
@@ -105,11 +106,12 @@ export function createGame(
   onReady: () => void,
   onError: (payload: GameErrorPayload) => void,
 ) {
+  const preloaderScene = ensureSceneObject(new PreloaderScene() as SceneWithLifecycle, 'PreloaderScene')
   const overworldScene = ensureSceneObject(new OverworldScene() as SceneWithLifecycle, 'OverworldScene')
   const battleScene = ensureSceneObject(new BattleScene() as SceneWithLifecycle, 'BattleScene')
   const fallbackScene = ensureSceneObject(new FallbackDummyScene() as SceneWithLifecycle, 'FallbackDummyScene')
 
-  ;([overworldScene, battleScene, fallbackScene] as SceneWithLifecycle[]).forEach((scene) => {
+  ;([preloaderScene, overworldScene, battleScene, fallbackScene] as SceneWithLifecycle[]).forEach((scene) => {
     wrapSceneLifecycle(scene, 'init', onError)
     wrapSceneLifecycle(scene, 'preload', onError)
     wrapSceneLifecycle(scene, 'create', onError)
@@ -137,7 +139,7 @@ export function createGame(
           debug: false,
         },
       },
-      scene: [overworldScene, battleScene, fallbackScene],
+      scene: [preloaderScene, overworldScene, battleScene, fallbackScene],
     })
 
     game.events.once('ready', onReady)
