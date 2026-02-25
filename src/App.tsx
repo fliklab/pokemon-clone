@@ -7,6 +7,7 @@ import { createGame } from './game/createGame'
 import { ErrorOverlay, type GameErrorPayload } from './game/ErrorOverlay'
 import { ko } from './i18n/ko'
 import { useGameStore } from './store/useGameStore'
+import './App.css'
 
 type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | 'new-game-confirm' | 'oak-dialog' | null
 
@@ -82,6 +83,7 @@ function App() {
     scenes: [],
     overworld: null,
   })
+  const [debugPanelExpanded, setDebugPanelExpanded] = useState(true)
   const lastEncounter = useGameStore((state) => state.lastEncounter)
   const battle = useGameStore((state) => state.battle)
   const nearbyNpc = useGameStore((state) => state.nearbyNpc)
@@ -309,6 +311,27 @@ function App() {
   }, [activeModal, focusGameCanvas, restoreOverworldRenderer, traceOakFlow])
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
+  const debugPanelProblems = useMemo(() => {
+    const problems: string[] = []
+
+    if (!sceneReady) {
+      problems.push('씬 준비 대기')
+    }
+
+    if (!debugRuntime.overworld?.mapLoaded) {
+      problems.push('맵 미로드')
+    }
+
+    if (debugRuntime.fps > 0 && debugRuntime.fps < 30) {
+      problems.push(`저FPS ${debugRuntime.fps.toFixed(1)}`)
+    }
+
+    if (gameError && !errorDismissed) {
+      problems.push('런타임 오류')
+    }
+
+    return problems
+  }, [debugRuntime.fps, debugRuntime.overworld?.mapLoaded, errorDismissed, gameError, sceneReady])
   const canOpenShop = nearbyNpc === 'shop'
   const canOpenPc = nearbyNpc === 'pc'
   const selectedPartyMonster = party.find((monster) => monster.id === selectedPartyId) ?? party[0]
@@ -386,89 +409,112 @@ function App() {
 
       {debugMode && (
         <section className="w-full max-w-5xl rounded border border-cyan-500/50 bg-slate-900/90 p-3 text-xs md:text-sm space-y-3">
-          <p className="font-semibold text-cyan-300">디버그 상태 패널</p>
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
-              <p className="text-cyan-200 font-semibold">로드 데이터</p>
-              <p>씬 준비: {sceneReady ? '완료' : '대기'}</p>
-              <p>오박사 튜토리얼: {oakIntroSeen ? '완료' : '미완료'}</p>
-              <p>최근 조우: {lastEncounter ? `${lastEncounter.x}, ${lastEncounter.y}` : '없음'}</p>
-            </div>
+          <button
+            type="button"
+            className="debug-panel-toggle"
+            onClick={() => setDebugPanelExpanded((prev) => !prev)}
+            aria-expanded={debugPanelExpanded}
+            aria-controls="debug-status-panel-grid"
+          >
+            <span className="font-semibold text-cyan-300">
+              디버그 상태 패널
+              {!debugPanelExpanded && (
+                <span className="ml-2 text-slate-200">
+                  (FPS {debugRuntime.fps.toFixed(1)} · 씬 {sceneReady ? '완료' : '대기'}
+                  {debugPanelProblems.length > 0 && (
+                    <span className="debug-panel-problem"> · 문제 {debugPanelProblems.length}</span>
+                  )}
+                  )
+                </span>
+              )}
+            </span>
+            <span className="debug-panel-caret" aria-hidden="true">{debugPanelExpanded ? '▴' : '▾'}</span>
+          </button>
 
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
-              <p className="text-cyan-200 font-semibold">맵 데이터</p>
-              <p>현재 타일: ({playerTile.x}, {playerTile.y})</p>
-              <p>근처 NPC: {nearbyNpc ?? '없음'}</p>
-              <p>디버그 모드: {debugMode ? '활성' : '비활성'}</p>
-            </div>
+          {debugPanelExpanded && (
+            <div id="debug-status-panel-grid" className="grid gap-2 md:grid-cols-2">
+              <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">로드 데이터</p>
+                <p>씬 준비: {sceneReady ? '완료' : '대기'}</p>
+                <p>오박사 튜토리얼: {oakIntroSeen ? '완료' : '미완료'}</p>
+                <p>최근 조우: {lastEncounter ? `${lastEncounter.x}, ${lastEncounter.y}` : '없음'}</p>
+              </div>
 
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
-              <p className="text-cyan-200 font-semibold">플레이어 데이터</p>
-              <p>리드 포켓몬: {party[0]?.name ?? '없음'} (Lv.{party[0]?.level ?? 0})</p>
-              <p>HP: {party[0]?.hp ?? 0}/{party[0]?.maxHp ?? 0}</p>
-              <p>소지금: ₽{money}</p>
-            </div>
+              <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">맵 데이터</p>
+                <p>현재 타일: ({playerTile.x}, {playerTile.y})</p>
+                <p>근처 NPC: {nearbyNpc ?? '없음'}</p>
+                <p>디버그 모드: {debugMode ? '활성' : '비활성'}</p>
+              </div>
 
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
-              <p className="text-cyan-200 font-semibold">렌더 데이터</p>
-              <p>렌더러: {debugRuntime.renderer}</p>
-              <p>FPS: {debugRuntime.fps.toFixed(1)}</p>
-              <p>캔버스: {debugRuntime.canvasWidth}×{debugRuntime.canvasHeight}</p>
-            </div>
+              <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">플레이어 데이터</p>
+                <p>리드 포켓몬: {party[0]?.name ?? '없음'} (Lv.{party[0]?.level ?? 0})</p>
+                <p>HP: {party[0]?.hp ?? 0}/{party[0]?.maxHp ?? 0}</p>
+                <p>소지금: ₽{money}</p>
+              </div>
 
-            <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
-              <p className="text-cyan-200 font-semibold">맵 렌더 진단</p>
-              {debugRuntime.overworld ? (
-                <>
-                  <p>맵 키: {debugRuntime.overworld.mapKey} ({debugRuntime.overworld.mapLoaded ? '로드됨' : '미로드'})</p>
-                  <p>맵 크기: {debugRuntime.overworld.widthTiles}×{debugRuntime.overworld.heightTiles} 타일 ({debugRuntime.overworld.widthPixels}×{debugRuntime.overworld.heightPixels}px)</p>
-                  <p>레이어 수: {debugRuntime.overworld.layers.length} (표시 {debugRuntime.overworld.layers.filter((layer) => layer.visible).length} / 숨김 {debugRuntime.overworld.layers.filter((layer) => !layer.visible).length})</p>
-                  <p>카메라: zoom {debugRuntime.overworld.cameraZoom.toFixed(2)} · scroll {Math.round(debugRuntime.overworld.cameraScrollX)}, {Math.round(debugRuntime.overworld.cameraScrollY)}</p>
-                  <p>카메라 bounds: {Math.round(debugRuntime.overworld.cameraBounds.x)}, {Math.round(debugRuntime.overworld.cameraBounds.y)} / {Math.round(debugRuntime.overworld.cameraBounds.width)}×{Math.round(debugRuntime.overworld.cameraBounds.height)}</p>
+              <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">렌더 데이터</p>
+                <p>렌더러: {debugRuntime.renderer}</p>
+                <p>FPS: {debugRuntime.fps.toFixed(1)}</p>
+                <p>캔버스: {debugRuntime.canvasWidth}×{debugRuntime.canvasHeight}</p>
+              </div>
+
+              <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2">
+                <p className="text-cyan-200 font-semibold">맵 렌더 진단</p>
+                {debugRuntime.overworld ? (
+                  <>
+                    <p>맵 키: {debugRuntime.overworld.mapKey} ({debugRuntime.overworld.mapLoaded ? '로드됨' : '미로드'})</p>
+                    <p>맵 크기: {debugRuntime.overworld.widthTiles}×{debugRuntime.overworld.heightTiles} 타일 ({debugRuntime.overworld.widthPixels}×{debugRuntime.overworld.heightPixels}px)</p>
+                    <p>레이어 수: {debugRuntime.overworld.layers.length} (표시 {debugRuntime.overworld.layers.filter((layer) => layer.visible).length} / 숨김 {debugRuntime.overworld.layers.filter((layer) => !layer.visible).length})</p>
+                    <p>카메라: zoom {debugRuntime.overworld.cameraZoom.toFixed(2)} · scroll {Math.round(debugRuntime.overworld.cameraScrollX)}, {Math.round(debugRuntime.overworld.cameraScrollY)}</p>
+                    <p>카메라 bounds: {Math.round(debugRuntime.overworld.cameraBounds.x)}, {Math.round(debugRuntime.overworld.cameraBounds.y)} / {Math.round(debugRuntime.overworld.cameraBounds.width)}×{Math.round(debugRuntime.overworld.cameraBounds.height)}</p>
+                    <div className="space-y-1">
+                      {debugRuntime.overworld.layers.map((layer) => (
+                        <p key={layer.name} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                          <span className="break-all">{layer.name}</span>
+                          <span>exists:{layer.exists ? 'Y' : 'N'}</span>
+                          <span>visible:{layer.visible ? 'Y' : 'N'}</span>
+                          <span>alpha:{layer.alpha.toFixed(2)}</span>
+                          <span>depth:{layer.depth}</span>
+                          <span>tint:#{layer.tint.toString(16).padStart(6, '0')}</span>
+                        </p>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p>오버월드 맵 진단 데이터 없음</p>
+                )}
+              </div>
+
+              <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">상태 데이터</p>
+                <p>활성 모달: {activeModal ?? '없음'}</p>
+                <p>배틀 상태: {battle.active ? battle.phase : '필드 탐험 중'}</p>
+                <p>상호작용 nonce: {interactionNonce}</p>
+              </div>
+
+              <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+                <p className="text-cyan-200 font-semibold">씬 스냅샷</p>
+                {debugRuntime.scenes.length > 0 ? (
                   <div className="space-y-1">
-                    {debugRuntime.overworld.layers.map((layer) => (
-                      <p key={layer.name} className="flex flex-wrap gap-x-2 gap-y-0.5">
-                        <span className="break-all">{layer.name}</span>
-                        <span>exists:{layer.exists ? 'Y' : 'N'}</span>
-                        <span>visible:{layer.visible ? 'Y' : 'N'}</span>
-                        <span>alpha:{layer.alpha.toFixed(2)}</span>
-                        <span>depth:{layer.depth}</span>
-                        <span>tint:#{layer.tint.toString(16).padStart(6, '0')}</span>
+                    {debugRuntime.scenes.map((scene) => (
+                      <p key={scene.key} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        <span className="break-all">{scene.key}</span>
+                        <span>active:{scene.active ? 'Y' : 'N'}</span>
+                        <span>visible:{scene.visible ? 'Y' : 'N'}</span>
+                        <span>sleep:{scene.sleeping ? 'Y' : 'N'}</span>
+                        <span>pause:{scene.paused ? 'Y' : 'N'}</span>
                       </p>
                     ))}
                   </div>
-                </>
-              ) : (
-                <p>오버월드 맵 진단 데이터 없음</p>
-              )}
+                ) : (
+                  <p>씬 정보 없음</p>
+                )}
+              </div>
             </div>
-
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-1">
-              <p className="text-cyan-200 font-semibold">상태 데이터</p>
-              <p>활성 모달: {activeModal ?? '없음'}</p>
-              <p>배틀 상태: {battle.active ? battle.phase : '필드 탐험 중'}</p>
-              <p>상호작용 nonce: {interactionNonce}</p>
-            </div>
-
-            <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
-              <p className="text-cyan-200 font-semibold">씬 스냅샷</p>
-              {debugRuntime.scenes.length > 0 ? (
-                <div className="space-y-1">
-                  {debugRuntime.scenes.map((scene) => (
-                    <p key={scene.key} className="flex flex-wrap gap-x-2 gap-y-0.5">
-                      <span className="break-all">{scene.key}</span>
-                      <span>active:{scene.active ? 'Y' : 'N'}</span>
-                      <span>visible:{scene.visible ? 'Y' : 'N'}</span>
-                      <span>sleep:{scene.sleeping ? 'Y' : 'N'}</span>
-                      <span>pause:{scene.paused ? 'Y' : 'N'}</span>
-                    </p>
-                  ))}
-                </div>
-              ) : (
-                <p>씬 정보 없음</p>
-              )}
-            </div>
-          </div>
+          )}
         </section>
       )}
 
