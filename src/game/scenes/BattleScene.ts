@@ -48,8 +48,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
-    this.cameras.main.setBackgroundColor('#1e293b')
-    this.createAttackParticleTexture()
+    try {
+      this.cameras.main.setBackgroundColor('#1e293b')
+      this.createAttackParticleTexture()
 
     this.add.rectangle(400, 350, 250, 100, 0x334155)
     this.add.rectangle(650, 130, 180, 80, 0x475569)
@@ -136,9 +137,13 @@ export class BattleScene extends Phaser.Scene {
     sync()
     this.unsub = useGameStore.subscribe(sync)
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.shutdown()
-    })
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.shutdown()
+      })
+    } catch (error) {
+      console.error('[battle] create failed', { error })
+      throw error
+    }
   }
 
   private createBattleCard(x: number, y: number, playerSide: boolean): BattleCardUi {

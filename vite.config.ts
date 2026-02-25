@@ -8,6 +8,7 @@ export default defineConfig({
   base: basePath.endsWith('/') ? basePath : `${basePath}/`,
   plugins: [react()],
   build: {
+    sourcemap: true,
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),

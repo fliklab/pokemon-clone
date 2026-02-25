@@ -109,14 +109,24 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
-    this.load.image(TILESET_KEY, TILESET_URL)
+    try {
+      this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
+      this.load.image(TILESET_KEY, TILESET_URL)
+    } catch (error) {
+      console.error('[overworld] preload failed', {
+        error,
+        mapUrl: MAP_URL,
+        tilesetUrl: TILESET_URL,
+      })
+      throw error
+    }
   }
 
   create() {
-    this.cameras.main.setBackgroundColor('#1f2937')
-    this.createPlayerFrameTextures()
-    this.createOakNpcTexture()
+    try {
+      this.cameras.main.setBackgroundColor('#1f2937')
+      this.createPlayerFrameTextures()
+      this.createOakNpcTexture()
 
     if (!this.textures.exists(TILESET_KEY)) {
       this.createTilesTexture()
@@ -254,10 +264,18 @@ export class OverworldScene extends Phaser.Scene {
       window.__overworldDebug = undefined
     })
 
-    this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
-    this.interactKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A)
+      this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
+      this.interactKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A)
 
-    useGameStore.getState().setSceneReady(true)
+      useGameStore.getState().setSceneReady(true)
+    } catch (error) {
+      console.error('[overworld] create failed', {
+        error,
+        mapKey: MAP_KEY,
+        tilesetKey: TILESET_KEY,
+      })
+      throw error
+    }
   }
 
   update() {
