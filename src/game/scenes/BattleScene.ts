@@ -1,4 +1,5 @@
 import Phaser from 'phaser'
+import { getSkillById } from '../../battle/skills'
 import { ko } from '../../i18n/ko'
 import { useGameStore } from '../../store/useGameStore'
 
@@ -18,6 +19,7 @@ export class BattleScene extends Phaser.Scene {
   private messageText?: Phaser.GameObjects.Text
   private phaseCursor = ''
   private currentMessage = ''
+  private lastSkillNonce = -1
 
   constructor() {
     super('battle')
@@ -73,6 +75,7 @@ export class BattleScene extends Phaser.Scene {
       enemyHpFill.fillColor = enemyRatio > 0.5 ? 0x22c55e : enemyRatio > 0.2 ? 0xf59e0b : 0xef4444
 
       this.applyPlaceholders(battle.phase)
+      this.applySkillCastFx(battle.lastSkillCast)
 
       const ended = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
       if (ended && !this.endTimer) {
@@ -175,6 +178,34 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  private applySkillCastFx(skillCast: { by: 'player' | 'enemy'; skillId: string; nonce: number } | null) {
+    if (!skillCast || skillCast.nonce === this.lastSkillNonce) {
+      return
+    }
+
+    this.lastSkillNonce = skillCast.nonce
+    const skill = getSkillById(skillCast.skillId)
+    const targetSprite = skillCast.by === 'player' ? this.enemySprite : this.playerSprite
+
+    if (skill.animation === 'wave') {
+      this.tweens.add({ targets: targetSprite, y: '-=10', yoyo: true, duration: 90, repeat: 1 })
+      this.cameras.main.flash(100, 120, 180, 255)
+    } else if (skill.animation === 'burst') {
+      this.tweens.add({ targets: targetSprite, scale: 1.15, yoyo: true, duration: 120 })
+      this.cameras.main.flash(100, 255, 160, 120)
+    } else if (skill.animation === 'spark') {
+      this.tweens.add({ targets: targetSprite, angle: 12, yoyo: true, duration: 60, repeat: 2 })
+      this.cameras.main.flash(80, 255, 255, 130)
+    } else if (skill.animation === 'whip') {
+      this.tweens.add({ targets: targetSprite, x: '+=8', yoyo: true, duration: 70, repeat: 2 })
+      this.cameras.main.shake(120, 0.002)
+    } else {
+      this.tweens.add({ targets: targetSprite, x: '+=16', yoyo: true, duration: 80 })
+    }
+
+    this.playSkillTone(skill.sfx)
+  }
+
   private playBattleStartWarningMusic() {
     const manager = this.sound as { context?: AudioContext }
     const audioCtx = manager.context
@@ -198,6 +229,26 @@ export class BattleScene extends Phaser.Scene {
       osc.start(now + idx * 0.18)
       osc.stop(now + idx * 0.18 + 0.16)
     })
+  }
+
+  private playSkillTone(sfx: 'pluck' | 'flame' | 'splash' | 'zap' | 'hit') {
+    if (sfx === 'pluck') {
+      this.playTone(280)
+      return
+    }
+    if (sfx === 'flame') {
+      this.playTone(360)
+      return
+    }
+    if (sfx === 'splash') {
+      this.playTone(240)
+      return
+    }
+    if (sfx === 'zap') {
+      this.playTone(520)
+      return
+    }
+    this.playTone(190)
   }
 
   private playTone(frequency: number) {
@@ -234,5 +285,6 @@ export class BattleScene extends Phaser.Scene {
     this.enemyHpLabel = undefined
     this.messageText = undefined
     this.currentMessage = ''
+    this.lastSkillNonce = -1
   }
 }

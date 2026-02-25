@@ -19,12 +19,22 @@ const trainerPositions: Record<string, { x: number; y: number }> = {
   'leader-nova': { x: 9, y: 7 },
 }
 
+const trainerVisionTiles: Record<string, string> = {
+  '9,2': 'junior-mia',
+  '9,3': 'junior-mia',
+  '10,4': 'ace-ryu',
+  '10,5': 'ace-ryu',
+  '9,5': 'leader-nova',
+  '9,6': 'leader-nova',
+}
+
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private player!: Phaser.Physics.Arcade.Sprite
   private grassLayer?: Phaser.Tilemaps.TilemapLayer
   private blockedLayer?: Phaser.Tilemaps.TilemapLayer
   private npcLayer?: Phaser.Tilemaps.TilemapLayer
+  private trainerVisionLayer?: Phaser.Tilemaps.TilemapLayer
   private debugMoveGraphics?: Phaser.GameObjects.Graphics
   private lastDebugTile?: { x: number; y: number }
   private interactKey?: Phaser.Input.Keyboard.Key
@@ -55,7 +65,9 @@ export class OverworldScene extends Phaser.Scene {
     this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer?.setVisible(false)
+    this.trainerVisionLayer?.setVisible(false)
 
     this.blockedLayer?.setCollision([TILE_WALL])
 
@@ -181,10 +193,14 @@ export class OverworldScene extends Phaser.Scene {
       state.requestNpcInteract()
     }
 
-    const trainer = getGymTrainers().find((entry) => {
+    const steppedTrainer = getGymTrainers().find((entry) => {
       const pos = trainerPositions[entry.id]
       return pos?.x === tileX && pos?.y === tileY
     })
+
+    const visionTrainerId = this.getTrainerIdFromVision(tileX, tileY)
+    const visionTrainer = visionTrainerId ? getGymTrainers().find((entry) => entry.id === visionTrainerId) : null
+    const trainer = steppedTrainer ?? visionTrainer
 
     if (trainer && !state.defeatedTrainers.includes(trainer.id)) {
       state.triggerTrainerBattle(trainer)
@@ -217,6 +233,19 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     return null
+  }
+
+  private getTrainerIdFromVision(tileX: number, tileY: number): string | null {
+    if (!this.trainerVisionLayer) {
+      return null
+    }
+
+    const tile = this.trainerVisionLayer.getTileAt(tileX, tileY)
+    if (!tile || tile.index <= 0) {
+      return null
+    }
+
+    return trainerVisionTiles[`${tileX},${tileY}`] ?? null
   }
 
   private getNearbyNpc(tileX: number, tileY: number): NearbyNpc {

@@ -1,0 +1,42 @@
+[
+  {
+    "id": "vine-whip",
+    "name": "덩굴채찍",
+    "type": "grass",
+    "power": 26,
+    "animation": "whip",
+    "sfx": "pluck"
+  },
+  {
+    "id": "ember",
+    "name": "불꽃세례",
+    "type": "fire",
+    "power": 28,
+    "animation": "burst",
+    "sfx": "flame"
+  },
+  {
+    "id": "water-gun",
+    "name": "물대포",
+    "type": "water",
+    "power": 27,
+    "animation": "wave",
+    "sfx": "splash"
+  },
+  {
+    "id": "thunder-shock",
+    "name": "전기쇼크",
+    "type": "electric",
+    "power": 29,
+    "animation": "spark",
+    "sfx": "zap"
+  },
+  {
+    "id": "tackle",
+    "name": "몸통박치기",
+    "type": "normal",
+    "power": 24,
+    "animation": "slam",
+    "sfx": "hit"
+  }
+]

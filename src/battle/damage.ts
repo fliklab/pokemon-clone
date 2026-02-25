@@ -28,14 +28,14 @@ export function calculateDamage(attacker: Battler, defender: Battler, power = 24
   return Math.max(1, Math.floor(base * typeMod * statusMod * randomFactor))
 }
 
-export function applyDamage(target: Battler, amount: number): Battler {
+export function applyDamage<T extends Battler>(target: T, amount: number): T {
   return {
     ...target,
     hp: Math.max(0, target.hp - amount),
   }
 }
 
-export function applyEndTurnStatus(target: Battler): Battler {
+export function applyEndTurnStatus<T extends Battler>(target: T): T {
   const chip = target.status === 'poison' || target.status === 'burn' ? Math.max(1, Math.floor(target.maxHp * 0.08)) : 0
   if (chip <= 0) {
     return target

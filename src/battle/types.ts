@@ -7,6 +7,7 @@ export type ElementType = 'normal' | 'fire' | 'water' | 'grass' | 'electric'
 export type StatusEffect = 'none' | 'burn' | 'poison'
 
 export type Battler = {
+  id?: string
   name: string
   level: number
   hp: number
@@ -18,10 +19,17 @@ export type Battler = {
   status: StatusEffect
 }
 
+export type SkillCast = {
+  by: 'player' | 'enemy'
+  skillId: string
+  nonce: number
+}
+
 export type BattleSnapshot = {
   phase: BattleStatus
   player: Battler
   enemy: Battler
   message: string
   lastDamage: number
+  lastSkillCast: SkillCast | null
 }

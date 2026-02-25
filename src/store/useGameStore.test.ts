@@ -24,6 +24,7 @@ function resetStore() {
       },
       message: 'Walk in grass to encounter a wild monster.',
       lastDamage: 0,
+      lastSkillCast: null,
       turn: 0,
       trainerBattle: null,
     },

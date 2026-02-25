@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { applyDamage, applyEndTurnStatus, calculateDamage } from '../battle/damage'
 import { calculateCatchChance, rollCatch } from '../battle/capture'
+import { chooseSkill } from '../battle/skills'
 import type { BattleCommand, BattleSnapshot, Battler } from '../battle/types'
 import { createStarterMonster, createWildEnemy, expForNextLevel, grantBattleExp, type PartyMonster } from '../progression/leveling'
 import { ko } from '../i18n/ko'
@@ -27,7 +28,14 @@ type DirectionalInput = {
 
 type NearbyNpc = 'shop' | 'pc' | null
 
-type PersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'>
+type PersistedState = Pick<
+  GameState,
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions' | 'battle' | 'debugMoveRange'
+> & {
+  version: 2
+}
+
+type LegacyPersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'>
 
 type GameState = {
   sceneReady: boolean
@@ -60,7 +68,8 @@ type GameState = {
   endBattle: () => void
 }
 
-const STORAGE_KEY = 'pokemon-clone-save-v1'
+const STORAGE_KEY = 'pokemon-clone-save-v2'
+const LEGACY_STORAGE_KEY = 'pokemon-clone-save-v1'
 const PARTY_CAP = 6
 const LOSE_PENALTY = 30
 const RESPAWN_TILE = { x: 3, y: 2 }
@@ -98,6 +107,7 @@ const initialBattleState = (party: PartyMonster[]): GameState['battle'] => ({
   enemy: createWildEnemy(party[0].level, 0),
   message: ko.store.walkHint,
   lastDamage: 0,
+  lastSkillCast: null,
   turn: 0,
   trainerBattle: null,
 })
@@ -112,12 +122,30 @@ function getPersistedState(): PersistedState | null {
   }
 
   const raw = window.localStorage.getItem(STORAGE_KEY)
-  if (!raw) {
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as PersistedState
+      if (parsed.version === 2) {
+        return parsed
+      }
+    } catch {
+      return null
+    }
+  }
+
+  const legacyRaw = window.localStorage.getItem(LEGACY_STORAGE_KEY)
+  if (!legacyRaw) {
     return null
   }
 
   try {
-    return JSON.parse(raw) as PersistedState
+    const legacy = JSON.parse(legacyRaw) as LegacyPersistedState
+    return {
+      ...legacy,
+      battle: initialBattleState(legacy.party),
+      debugMoveRange: false,
+      version: 2,
+    }
   } catch {
     return null
   }
@@ -132,6 +160,9 @@ function toPersistedPayload(state: GameState): PersistedState {
     defeatedTrainers: state.defeatedTrainers,
     money: state.money,
     potions: state.potions,
+    battle: state.battle,
+    debugMoveRange: state.debugMoveRange,
+    version: 2,
   }
 }
 
@@ -207,9 +238,26 @@ function applyLossPenalty(state: GameState): Pick<GameState, 'party' | 'money' |
   }
 }
 
-function defaultState(): Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'> {
+function defaultState(): Pick<
+  GameState,
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions' | 'battle' | 'debugMoveRange'
+> {
   const saved = getPersistedState()
-  return saved ?? {
+  if (saved) {
+    return {
+      playerTile: saved.playerTile,
+      lastEncounter: saved.lastEncounter,
+      party: saved.party,
+      badges: saved.badges,
+      defeatedTrainers: saved.defeatedTrainers,
+      money: saved.money,
+      potions: saved.potions,
+      battle: saved.battle,
+      debugMoveRange: saved.debugMoveRange,
+    }
+  }
+
+  return {
     playerTile: { x: 0, y: 0 },
     lastEncounter: null,
     party: initialParty,
@@ -217,6 +265,8 @@ function defaultState(): Pick<GameState, 'playerTile' | 'lastEncounter' | 'party
     defeatedTrainers: [],
     money: 120,
     potions: 1,
+    battle: initialBattleState(initialParty),
+    debugMoveRange: false,
   }
 }
 
@@ -224,10 +274,10 @@ const bootState = defaultState()
 
 export const useGameStore = create<GameState>((set, get) => ({
   sceneReady: false,
-  debugMoveRange: false,
+  debugMoveRange: bootState.debugMoveRange,
   playerTile: bootState.playerTile,
   lastEncounter: bootState.lastEncounter,
-  battle: initialBattleState(bootState.party),
+  battle: bootState.battle,
   party: bootState.party,
   badges: bootState.badges,
   defeatedTrainers: bootState.defeatedTrainers,
@@ -288,7 +338,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       ...state,
       ...saved,
-      battle: initialBattleState(saved.party),
+      battle: saved.battle,
+      debugMoveRange: saved.debugMoveRange,
       virtualInput: initialVirtualInput,
       nearbyNpc: null,
       interactionNonce: 0,
@@ -315,6 +366,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         enemy,
         message: ko.store.wildAppeared(enemy.name),
         lastDamage: 0,
+        lastSkillCast: null,
         turn: 1,
         trainerBattle: null,
       },
@@ -335,6 +387,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         enemy: trainer.enemy,
         message: ko.store.trainerChallenge(trainer.name, trainer.badgeReward),
         lastDamage: 0,
+        lastSkillCast: null,
         turn: 1,
         trainerBattle: trainer,
       },
@@ -452,18 +505,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       let enemy = battle.enemy
       let message = ''
       let lastDamage = 0
+      let lastSkillCast = battle.lastSkillCast
 
       const playerAttack = () => {
-        const damage = calculateDamage(player, enemy)
+        const skill = chooseSkill(player)
+        const damage = calculateDamage(player, enemy, skill.power)
         enemy = applyDamage(enemy, damage)
         lastDamage = damage
-        message = ko.store.dealtDamage(player.name, damage)
+        lastSkillCast = { by: 'player', skillId: skill.id, nonce: battle.turn * 2 }
+        message = `${player.name} ${skill.name}! ${damage} 데미지!`
       }
 
       const enemyAttack = () => {
-        const damage = calculateDamage(enemy, player)
+        const skill = chooseSkill(enemy)
+        const damage = calculateDamage(enemy, player, skill.power)
         player = applyDamage(player, damage)
-        message += ` ${ko.store.dealtDamageBack(enemy.name, damage)}`
+        lastSkillCast = { by: 'enemy', skillId: skill.id, nonce: battle.turn * 2 + 1 }
+        message += ` ${enemy.name} ${skill.name}! ${damage} 데미지!`
       }
 
       if (playerFirst) {
@@ -512,6 +570,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           enemy,
           message: resolvedMessage,
           lastDamage,
+          lastSkillCast,
           turn: battle.turn + 1,
         },
         party,
@@ -524,14 +583,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const updated = get().battle
     if (updated.phase === 'enemy_turn') {
-      const retaliation = calculateDamage(updated.enemy, updated.player, 20)
+      const enemySkill = chooseSkill(updated.enemy)
+      const retaliation = calculateDamage(updated.enemy, updated.player, enemySkill.power)
       const playerAfter = applyDamage(updated.player, retaliation)
       set({
         battle: {
           ...updated,
           player: playerAfter,
           phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
-          message: `${updated.message} ${ko.store.enemyAttack(updated.enemy.name, retaliation)}`,
+          message: `${updated.message} ${updated.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
+          lastSkillCast: { by: 'enemy', skillId: enemySkill.id, nonce: updated.turn * 3 + 1 },
           turn: updated.turn + 1,
         },
       })
@@ -552,7 +613,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     const reorderedParty = [nextMonster, ...party.filter((monster) => monster.id !== nextMonster.id)]
 
     const switchedMessage = ko.store.switchedMonster(nextMonster.name)
-    const retaliation = calculateDamage(battle.enemy, nextMonster, 20)
+    const enemySkill = chooseSkill(battle.enemy)
+    const retaliation = calculateDamage(battle.enemy, nextMonster, enemySkill.power)
     const playerAfter = applyDamage(nextMonster, retaliation)
 
     set({
@@ -561,7 +623,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...battle,
         player: { ...playerAfter },
         phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
-        message: `${switchedMessage} ${ko.store.enemyAttack(battle.enemy.name, retaliation)}`,
+        message: `${switchedMessage} ${battle.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
+        lastSkillCast: { by: 'enemy', skillId: enemySkill.id, nonce: battle.turn * 3 + 2 },
         turn: battle.turn + 1,
       },
     })
