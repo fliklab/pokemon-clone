@@ -1,5 +1,7 @@
 export type BattleCommand = 'fight' | 'item' | 'catch' | 'run'
 
+export type ItemId = 'potion' | 'superPotion' | 'antidote'
+
 export type BattleStatus = 'idle' | 'player_turn' | 'enemy_turn' | 'resolved' | 'escaped' | 'caught' | 'lost'
 
 export type ElementType = 'normal' | 'fire' | 'water' | 'grass' | 'electric'
@@ -17,6 +19,7 @@ export type Battler = {
   speed: number
   type: ElementType
   status: StatusEffect
+  knownSkills?: string[]
 }
 
 export type SkillCast = {

@@ -1,11 +1,13 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from '@headlessui/react'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type Phaser from 'phaser'
+import { resolveSkillSlots } from './battle/skills'
+import type { ItemId } from './battle/types'
 import { createGame } from './game/createGame'
 import { ko } from './i18n/ko'
 import { useGameStore } from './store/useGameStore'
 
-type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | null
+type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | 'new-game-confirm' | 'oak-intro' | null
 
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
@@ -18,12 +20,16 @@ function App() {
   const interactionNonce = useGameStore((state) => state.interactionNonce)
   const party = useGameStore((state) => state.party)
   const money = useGameStore((state) => state.money)
-  const potions = useGameStore((state) => state.potions)
+  const itemBag = useGameStore((state) => state.itemBag)
+  const oakIntroSeen = useGameStore((state) => state.oakIntroSeen)
   const setSceneReady = useGameStore((state) => state.setSceneReady)
   const chooseBattleCommand = useGameStore((state) => state.chooseBattleCommand)
   const switchBattleMonster = useGameStore((state) => state.switchBattleMonster)
   const healPartyAtPc = useGameStore((state) => state.healPartyAtPc)
   const buyPotion = useGameStore((state) => state.buyPotion)
+  const consumeBagItem = useGameStore((state) => state.consumeBagItem)
+  const markOakIntroSeen = useGameStore((state) => state.markOakIntroSeen)
+  const resetGame = useGameStore((state) => state.resetGame)
   const saveGame = useGameStore((state) => state.saveGame)
   const loadGame = useGameStore((state) => state.loadGame)
   const endBattle = useGameStore((state) => state.endBattle)
@@ -73,13 +79,35 @@ function App() {
   const canOpenShop = nearbyNpc === 'shop'
   const canOpenPc = nearbyNpc === 'pc'
   const selectedPartyMonster = party.find((monster) => monster.id === selectedPartyId) ?? party[0]
+  const skillSlots = useMemo(() => resolveSkillSlots(battle.player), [battle.player])
+  const bagEntries = useMemo(() => (
+    [
+      { id: 'potion' as ItemId, label: ko.app.items.potion },
+      { id: 'superPotion' as ItemId, label: ko.app.items.superPotion },
+      { id: 'antidote' as ItemId, label: ko.app.items.antidote },
+    ]
+  ), [])
+
+  useEffect(() => {
+    if (oakIntroSeen) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setActiveModal('oak-intro')
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [oakIntroSeen])
 
   useEffect(() => {
     if (interactionNonce === 0) {
       return
     }
 
-    const modal = nearbyNpc === 'shop' ? 'shop' : nearbyNpc === 'pc' ? 'pc' : null
+    const modal = nearbyNpc === 'shop' ? 'shop' : nearbyNpc === 'pc' ? 'pc' : nearbyNpc === 'oak' ? 'oak-intro' : null
     if (!modal) {
       return
     }
@@ -91,7 +119,7 @@ function App() {
     return () => {
       window.cancelAnimationFrame(frame)
     }
-  }, [interactionNonce, nearbyNpc])
+  }, [interactionNonce, nearbyNpc, oakIntroSeen])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
@@ -185,10 +213,14 @@ function App() {
       <BaseModal open={activeModal === 'inventory'} onClose={closeModal} title={ko.app.modal.inventoryTitle}>
         <div className="text-sm space-y-2">
           <p className="text-emerald-300">{ko.app.modal.money(money)}</p>
-          {potions > 0 ? (
-            <div className="rounded border border-slate-700 p-2 bg-slate-800/70 flex items-center justify-between">
-              <span>포션</span>
-              <span>{ko.app.modal.potions(potions)}</span>
+          {bagEntries.some((entry) => itemBag[entry.id] > 0) ? (
+            <div className="space-y-2">
+              {bagEntries.map((entry) => (
+                <div key={entry.id} className="rounded border border-slate-700 p-2 bg-slate-800/70 flex items-center justify-between">
+                  <span>{entry.label}</span>
+                  <span>{ko.app.modal.itemCount(itemBag[entry.id])}</span>
+                </div>
+              ))}
             </div>
           ) : (
             <p className="text-slate-400">{ko.app.modal.inventoryEmpty}</p>
@@ -239,6 +271,9 @@ function App() {
             <button className="rounded bg-slate-700 active:bg-slate-600 p-3" onClick={loadGame}>
               {ko.app.modal.loadNow}
             </button>
+            <button className="col-span-2 rounded bg-rose-700 active:bg-rose-600 p-3" onClick={() => openModal('new-game-confirm')}>
+              {ko.app.modal.newGame}
+            </button>
           </div>
         </div>
       </BaseModal>
@@ -257,6 +292,29 @@ function App() {
         </div>
       </BaseModal>
 
+      <BaseModal open={activeModal === 'new-game-confirm'} onClose={() => openModal('save')} title={ko.app.modal.newGameConfirmTitle}>
+        <div className="space-y-3 text-sm">
+          <p className="text-slate-300">{ko.app.modal.newGameConfirmDesc}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button className="rounded bg-rose-700 active:bg-rose-600 p-3" onClick={() => { resetGame(); gameRef.current?.scene.start('overworld'); closeModal() }}>
+              {ko.app.modal.confirm}
+            </button>
+            <button className="rounded bg-slate-700 active:bg-slate-600 p-3" onClick={() => openModal('save')}>
+              {ko.app.modal.cancel}
+            </button>
+          </div>
+        </div>
+      </BaseModal>
+
+      <BaseModal open={activeModal === 'oak-intro'} onClose={closeModal} title={ko.app.modal.oakTitle}>
+        <div className="space-y-3 text-sm">
+          <p className="text-slate-200">{ko.app.modal.oakIntro}</p>
+          <button className="w-full rounded bg-emerald-700 active:bg-emerald-600 p-3 font-semibold" onClick={() => { markOakIntroSeen(); closeModal() }}>
+            {ko.app.modal.startAdventure}
+          </button>
+        </div>
+      </BaseModal>
+
       {battle.active && (
         <section className="fixed md:static bottom-3 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-[calc(100%-1.5rem)] md:w-full max-w-sm md:max-w-5xl bg-slate-900/95 border border-slate-700 rounded p-4 space-y-3 shadow-2xl">
           <div className="flex justify-between text-sm">
@@ -266,11 +324,32 @@ function App() {
           <p className="text-amber-300">{battle.message}</p>
 
           {battle.phase === 'player_turn' && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <button className="bg-emerald-700 p-2 rounded" onClick={() => chooseBattleCommand('fight')}>{ko.app.battle.fight}</button>
-              <button className="bg-cyan-700 p-2 rounded" onClick={() => chooseBattleCommand('item')}>{ko.app.battle.item(potions)}</button>
-              <button className="bg-indigo-700 p-2 rounded" onClick={() => chooseBattleCommand('catch')}>{ko.app.battle.catch}</button>
-              <button className="bg-rose-700 p-2 rounded" onClick={() => chooseBattleCommand('run')}>{ko.app.battle.run}</button>
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {skillSlots.map((skill) => (
+                  <button
+                    key={skill.id}
+                    className="bg-emerald-700 p-2 rounded"
+                    onClick={() => chooseBattleCommand('fight', skill.id)}
+                  >
+                    {skill.name}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                {bagEntries.map((entry) => (
+                  <button
+                    key={entry.id}
+                    className="bg-cyan-700 p-2 rounded disabled:opacity-50"
+                    onClick={() => consumeBagItem(entry.id)}
+                    disabled={(itemBag[entry.id] ?? 0) <= 0}
+                  >
+                    {entry.label} x{itemBag[entry.id] ?? 0}
+                  </button>
+                ))}
+                <button className="bg-indigo-700 p-2 rounded" onClick={() => chooseBattleCommand('catch')}>{ko.app.battle.catch}</button>
+                <button className="bg-rose-700 p-2 rounded" onClick={() => chooseBattleCommand('run')}>{ko.app.battle.run}</button>
+              </div>
             </div>
           )}
 

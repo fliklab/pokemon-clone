@@ -1,8 +1,8 @@
 import { create } from 'zustand'
 import { applyDamage, applyEndTurnStatus, calculateDamage } from '../battle/damage'
 import { calculateCatchChance, rollCatch } from '../battle/capture'
-import { chooseSkill } from '../battle/skills'
-import type { BattleCommand, BattleSnapshot, Battler } from '../battle/types'
+import { chooseSkill, getSkillById, resolveSkillSlots } from '../battle/skills'
+import type { BattleCommand, BattleSnapshot, Battler, ItemId } from '../battle/types'
 import { createStarterMonster, createWildEnemy, expForNextLevel, grantBattleExp, type PartyMonster } from '../progression/leveling'
 import { ko } from '../i18n/ko'
 
@@ -26,13 +26,15 @@ type DirectionalInput = {
   right: boolean
 }
 
-type NearbyNpc = 'shop' | 'pc' | null
+type NearbyNpc = 'shop' | 'pc' | 'oak' | null
+
+type ItemBag = Record<ItemId, number>
 
 type PersistedState = Pick<
   GameState,
-  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions' | 'battle' | 'debugMoveRange'
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMoveRange' | 'oakIntroSeen'
 > & {
-  version: 2
+  version: 3
 }
 
 type LegacyPersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions'>
@@ -47,7 +49,9 @@ type GameState = {
   badges: string[]
   defeatedTrainers: string[]
   money: number
+  itemBag: ItemBag
   potions: number
+  oakIntroSeen: boolean
   virtualInput: DirectionalInput
   nearbyNpc: NearbyNpc
   interactionNonce: number
@@ -56,20 +60,23 @@ type GameState = {
   setPlayerTile: (x: number, y: number) => void
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
-  chooseBattleCommand: (command: BattleCommand) => void
+  chooseBattleCommand: (command: BattleCommand, skillId?: string) => void
   switchBattleMonster: (monsterId: string) => void
   setVirtualInput: (direction: keyof DirectionalInput, active: boolean) => void
   setNearbyNpc: (target: NearbyNpc) => void
   requestNpcInteract: () => void
   healPartyAtPc: () => void
   buyPotion: () => void
+  consumeBagItem: (itemId: ItemId) => void
+  markOakIntroSeen: () => void
+  resetGame: () => void
   saveGame: () => void
   loadGame: () => void
   endBattle: () => void
 }
 
-const STORAGE_KEY = 'pokemon-clone-save-v2'
-const LEGACY_STORAGE_KEY = 'pokemon-clone-save-v1'
+const STORAGE_KEY = 'pokemon-clone-save-v3'
+const LEGACY_STORAGE_KEY = 'pokemon-clone-save-v2'
 const PARTY_CAP = 6
 const LOSE_PENALTY = 30
 const RESPAWN_TILE = { x: 3, y: 2 }
@@ -98,6 +105,12 @@ const trainerRoster: TrainerBattle[] = [
 
 const initialVirtualInput: DirectionalInput = { up: false, down: false, left: false, right: false }
 
+const initialItemBag: ItemBag = {
+  potion: 2,
+  superPotion: 1,
+  antidote: 1,
+}
+
 const initialParty = [createStarterMonster()]
 
 const initialBattleState = (party: PartyMonster[]): GameState['battle'] => ({
@@ -125,7 +138,7 @@ function getPersistedState(): PersistedState | null {
   if (raw) {
     try {
       const parsed = JSON.parse(raw) as PersistedState
-      if (parsed.version === 2) {
+      if (parsed.version === 3) {
         return parsed
       }
     } catch {
@@ -142,9 +155,14 @@ function getPersistedState(): PersistedState | null {
     const legacy = JSON.parse(legacyRaw) as LegacyPersistedState
     return {
       ...legacy,
+      itemBag: {
+        ...initialItemBag,
+        potion: legacy.potions,
+      },
       battle: initialBattleState(legacy.party),
       debugMoveRange: false,
-      version: 2,
+      oakIntroSeen: false,
+      version: 3,
     }
   } catch {
     return null
@@ -159,10 +177,11 @@ function toPersistedPayload(state: GameState): PersistedState {
     badges: state.badges,
     defeatedTrainers: state.defeatedTrainers,
     money: state.money,
-    potions: state.potions,
+    itemBag: state.itemBag,
     battle: state.battle,
     debugMoveRange: state.debugMoveRange,
-    version: 2,
+    oakIntroSeen: state.oakIntroSeen,
+    version: 3,
   }
 }
 
@@ -240,7 +259,7 @@ function applyLossPenalty(state: GameState): Pick<GameState, 'party' | 'money' |
 
 function defaultState(): Pick<
   GameState,
-  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'potions' | 'battle' | 'debugMoveRange'
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMoveRange' | 'oakIntroSeen'
 > {
   const saved = getPersistedState()
   if (saved) {
@@ -251,9 +270,10 @@ function defaultState(): Pick<
       badges: saved.badges,
       defeatedTrainers: saved.defeatedTrainers,
       money: saved.money,
-      potions: saved.potions,
+      itemBag: saved.itemBag,
       battle: saved.battle,
       debugMoveRange: saved.debugMoveRange,
+      oakIntroSeen: saved.oakIntroSeen,
     }
   }
 
@@ -264,9 +284,10 @@ function defaultState(): Pick<
     badges: [],
     defeatedTrainers: [],
     money: 120,
-    potions: 1,
+    itemBag: initialItemBag,
     battle: initialBattleState(initialParty),
     debugMoveRange: false,
+    oakIntroSeen: false,
   }
 }
 
@@ -282,7 +303,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   badges: bootState.badges,
   defeatedTrainers: bootState.defeatedTrainers,
   money: bootState.money,
-  potions: bootState.potions,
+  itemBag: bootState.itemBag,
+  potions: bootState.itemBag.potion,
+  oakIntroSeen: bootState.oakIntroSeen,
   virtualInput: initialVirtualInput,
   nearbyNpc: null,
   interactionNonce: 0,
@@ -318,12 +341,73 @@ export const useGameStore = create<GameState>((set, get) => ({
         return state
       }
 
+      const nextBag = { ...state.itemBag, potion: state.itemBag.potion + 1 }
       return {
         money: state.money - 20,
-        potions: state.potions + 1,
+        itemBag: nextBag,
+        potions: nextBag.potion,
       }
     })
   },
+  consumeBagItem: (itemId) => {
+    set((state) => {
+      const count = state.itemBag[itemId] ?? 0
+      if (count <= 0 || !state.battle.active || state.battle.phase !== 'player_turn') {
+        return state
+      }
+
+      const nextBag = { ...state.itemBag, [itemId]: Math.max(0, count - 1) }
+      const battle = state.battle
+
+      if (itemId === 'antidote') {
+        return {
+          itemBag: nextBag,
+          potions: nextBag.potion,
+          battle: {
+            ...battle,
+            player: { ...battle.player, status: 'none' },
+            phase: 'enemy_turn',
+            message: ko.store.antidoteUsed(battle.player.name),
+          },
+        }
+      }
+
+      const healAmount = itemId === 'superPotion' ? 24 : 12
+      const healed = Math.min(battle.player.maxHp, battle.player.hp + healAmount)
+
+      return {
+        itemBag: nextBag,
+        potions: nextBag.potion,
+        battle: {
+          ...battle,
+          player: { ...battle.player, hp: healed },
+          phase: 'enemy_turn',
+          message: ko.store.bagItemUsed(itemId, battle.player.name),
+        },
+      }
+    })
+  },
+  markOakIntroSeen: () => set({ oakIntroSeen: true }),
+  resetGame: () => set(() => {
+    const freshParty = [createStarterMonster()]
+    return {
+      sceneReady: true,
+      debugMoveRange: false,
+      playerTile: { x: 3, y: 2 },
+      lastEncounter: null,
+      battle: initialBattleState(freshParty),
+      party: freshParty,
+      badges: [],
+      defeatedTrainers: [],
+      money: 120,
+      itemBag: initialItemBag,
+      potions: initialItemBag.potion,
+      oakIntroSeen: false,
+      virtualInput: initialVirtualInput,
+      nearbyNpc: null,
+      interactionNonce: 0,
+    }
+  }),
   saveGame: () => {
     const state = get()
     persistState(state)
@@ -340,6 +424,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       ...saved,
       battle: saved.battle,
       debugMoveRange: saved.debugMoveRange,
+      potions: saved.itemBag.potion,
       virtualInput: initialVirtualInput,
       nearbyNpc: null,
       interactionNonce: 0,
@@ -393,7 +478,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     })
   },
-  chooseBattleCommand: (command) => {
+  chooseBattleCommand: (command, skillId) => {
     const { battle } = get()
     if (!battle.active || battle.phase !== 'player_turn') {
       return
@@ -477,26 +562,20 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
 
     if (command === 'item') {
-      if (get().potions <= 0) {
+      const bag = get().itemBag
+      const fallbackItem = bag.superPotion > 0 ? 'superPotion' : bag.potion > 0 ? 'potion' : bag.antidote > 0 ? 'antidote' : null
+      if (!fallbackItem) {
         set({
           battle: {
             ...battle,
-            message: ko.store.noPotion,
+            message: ko.store.noBagItem,
           },
         })
         return
       }
 
-      const healed = Math.min(battle.player.maxHp, battle.player.hp + 12)
-      set((state) => ({
-        potions: Math.max(0, state.potions - 1),
-        battle: {
-          ...battle,
-          player: { ...battle.player, hp: healed },
-          phase: 'enemy_turn',
-          message: ko.store.potionUsed(battle.player.name),
-        },
-      }))
+      get().consumeBagItem(fallbackItem)
+      return
     }
 
     if (command === 'fight') {
@@ -508,7 +587,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       let lastSkillCast = battle.lastSkillCast
 
       const playerAttack = () => {
-        const skill = chooseSkill(player)
+        const allowedSkillIds = resolveSkillSlots(player).map((entry) => entry.id)
+        const skill = skillId && allowedSkillIds.includes(skillId) ? getSkillById(skillId) : chooseSkill(player)
         const damage = calculateDamage(player, enemy, skill.power)
         enemy = applyDamage(enemy, damage)
         lastDamage = damage

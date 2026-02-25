@@ -12,7 +12,7 @@ const TILE_GROUND = 1
 const TILE_GRASS = 2
 const TILE_WALL = 3
 
-type NearbyNpc = 'shop' | 'pc' | null
+type NearbyNpc = 'shop' | 'pc' | 'oak' | null
 
 const trainerPositions: Record<string, { x: number; y: number }> = {
   'junior-mia': { x: 9, y: 4 },
@@ -44,6 +44,7 @@ export class OverworldScene extends Phaser.Scene {
   private wasInGrass = false
   private lastFacingDirection: 'down' | 'up' | 'left' | 'right' = 'down'
   private walkFrameCursor = 0
+  private warpCooldownUntil = 0
 
   constructor() {
     super('overworld')
@@ -74,9 +75,12 @@ export class OverworldScene extends Phaser.Scene {
 
     this.blockedLayer?.setCollision([TILE_WALL])
 
+    const currentTile = useGameStore.getState().playerTile
+    const startTile = currentTile.x > 0 || currentTile.y > 0 ? currentTile : { x: 3, y: 2 }
+
     this.player = this.physics.add.sprite(
-      TILE_SIZE * WORLD_SCALE * 2.5,
-      TILE_SIZE * WORLD_SCALE * 3,
+      (startTile.x + 0.5) * TILE_SIZE * WORLD_SCALE,
+      (startTile.y + 1) * TILE_SIZE * WORLD_SCALE,
       'player-down-0',
     )
 
@@ -172,8 +176,15 @@ export class OverworldScene extends Phaser.Scene {
     body.velocity.normalize().scale(PLAYER_SPEED)
     this.updatePlayerAnimation(body.velocity.x, body.velocity.y)
 
-    const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
-    const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
+    let tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
+    let tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
+
+    const warped = this.applyEdgeWarp(tileX, tileY)
+    if (warped) {
+      tileX = warped.x
+      tileY = warped.y
+    }
+
     const grassTile = this.grassLayer?.getTileAt(tileX, tileY)
     const inGrass = Boolean(grassTile && grassTile.index !== -1)
 
@@ -197,7 +208,7 @@ export class OverworldScene extends Phaser.Scene {
     state.setNearbyNpc(nearbyNpc)
 
     const keyboardInteract = this.interactKey ? Phaser.Input.Keyboard.JustDown(this.interactKey) : false
-    if (keyboardInteract && (nearbyNpc === 'shop' || nearbyNpc === 'pc')) {
+    if (keyboardInteract && (nearbyNpc === 'shop' || nearbyNpc === 'pc' || nearbyNpc === 'oak')) {
       state.requestNpcInteract()
     }
 
@@ -256,6 +267,43 @@ export class OverworldScene extends Phaser.Scene {
     return trainerVisionTiles[`${tileX},${tileY}`] ?? null
   }
 
+  private applyEdgeWarp(tileX: number, tileY: number): { x: number; y: number } | null {
+    if (!this.blockedLayer || this.time.now < this.warpCooldownUntil) {
+      return null
+    }
+
+    const width = this.blockedLayer.layer.width
+    const height = this.blockedLayer.layer.height
+
+    let nextX = tileX
+    let nextY = tileY
+    let hasWarped = false
+
+    if (tileX <= 0) {
+      nextX = width - 2
+      hasWarped = true
+    } else if (tileX >= width - 1) {
+      nextX = 1
+      hasWarped = true
+    }
+
+    if (tileY <= 0) {
+      nextY = height - 2
+      hasWarped = true
+    } else if (tileY >= height - 1) {
+      nextY = 1
+      hasWarped = true
+    }
+
+    if (!hasWarped) {
+      return null
+    }
+
+    this.player.setPosition((nextX + 0.5) * TILE_SIZE * WORLD_SCALE, (nextY + 1) * TILE_SIZE * WORLD_SCALE)
+    this.warpCooldownUntil = this.time.now + 240
+    return { x: nextX, y: nextY }
+  }
+
   private getNearbyNpc(tileX: number, tileY: number): NearbyNpc {
     if (!this.npcLayer) {
       return null
@@ -276,6 +324,9 @@ export class OverworldScene extends Phaser.Scene {
       }
       if (tile?.index === 2) {
         return 'pc'
+      }
+      if (tile?.index === 4) {
+        return 'oak'
       }
     }
 

@@ -41,6 +41,7 @@ export function createStarterMonster(): PartyMonster {
     speed: 12,
     type: 'grass',
     status: 'none',
+    knownSkills: ['vine-whip', 'tackle', 'water-gun', 'thunder-shock'],
     exp: 0,
     nextLevelExp: expForNextLevel(5),
     evolutionRule: {
@@ -71,6 +72,7 @@ export function createWildEnemy(playerLevel = 5, badges = 0): Battler {
     speed: 7 + level,
     type: roll ? 'fire' : 'water',
     status: 'none',
+    knownSkills: roll ? ['ember', 'tackle', 'thunder-shock', 'vine-whip'] : ['water-gun', 'tackle', 'vine-whip', 'ember'],
   }
 }
 

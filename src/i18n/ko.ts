@@ -21,6 +21,11 @@ export const ko = {
     talkButton: 'A 말걸기',
     talkEnabled: 'NPC 대화 가능',
     talkDisabled: 'NPC 근처에서 활성화',
+    items: {
+      potion: '포션',
+      superPotion: '슈퍼포션',
+      antidote: '해독제',
+    },
     battle: {
       fight: '공격',
       item: (count: number) => `아이템 (${count})`,
@@ -51,6 +56,12 @@ export const ko = {
       saveDesc: '현재 진행 상황을 로컬에 저장하거나 불러옵니다.',
       saveNow: '지금 저장',
       loadNow: '불러오기',
+      newGame: '새 게임 시작',
+      newGameConfirmTitle: '새 게임을 시작할까요?',
+      newGameConfirmDesc: '현재 진행 상황을 초기화하고 처음부터 다시 시작합니다.',
+      oakTitle: '오박사 인트로',
+      oakIntro: '안녕! 나는 오박사다. 풀숲에서 야생 포켓몬을 만나고, 상점과 PC를 활용해 모험을 이어가거라!',
+      startAdventure: '모험 시작!',
       confirmSaveTitle: '게임을 저장할까요?',
       confirmSaveDesc: 'localStorage에 현재 파티/돈/아이템/진행도를 저장합니다.',
       confirm: '확인',
@@ -60,6 +71,7 @@ export const ko = {
       viewParty: '파티 상태 보기',
       money: (amount: number) => `보유 금액: ₽ ${amount}`,
       potions: (count: number) => `포션: ${count}개`,
+      itemCount: (count: number) => `${count}개`,
       hp: (hp: number, maxHp: number) => `HP ${hp}/${maxHp}`,
     },
   },
@@ -82,7 +94,14 @@ export const ko = {
     caught: (name: string) => `${name} 포획 성공!`,
     brokeFree: (name: string) => `${name} 이(가) 볼에서 빠져나왔다!`,
     noPotion: '포션이 없다! 상점에서 구매하자.',
+    noBagItem: '가방에 사용할 아이템이 없다!',
     potionUsed: (name: string) => `${name} 의 HP가 포션으로 회복됐다.`,
+    antidoteUsed: (name: string) => `${name} 의 상태이상이 해제됐다.`,
+    bagItemUsed: (itemId: 'potion' | 'superPotion' | 'antidote', name: string) => {
+      if (itemId === 'superPotion') return `${name} 의 HP가 슈퍼포션으로 크게 회복됐다.`
+      if (itemId === 'antidote') return `${name} 에게 해독제를 사용했다.`
+      return `${name} 의 HP가 포션으로 회복됐다.`
+    },
     dealtDamage: (name: string, damage: number) => `${name} 의 공격! ${damage} 데미지!`,
     dealtDamageBack: (name: string, damage: number) => `${name} 의 반격! ${damage} 데미지!`,
     victory: (name: string, level: number, evolutionNote: string) => ` 승리! ${name} 레벨 ${level} 달성!${evolutionNote}`,
