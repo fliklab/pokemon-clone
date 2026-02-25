@@ -106,6 +106,12 @@ function App() {
   const debugMoveRange = useGameStore((state) => state.debugMoveRange)
   const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
   const debugRouteMode: DebugRouteMode = window.__debugRouteMode ?? null
+  const debugModeEnabled = useMemo(() => {
+    const debugQuery = new URLSearchParams(window.location.search).get('debugMode') === 'true'
+    const debugStorage = window.localStorage.getItem('debugMode') === 'true'
+
+    return debugQuery || debugStorage
+  }, [])
 
   const focusGameCanvas = useCallback(() => {
     gameCanvasContainerRef.current?.focus()
@@ -315,7 +321,19 @@ function App() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
       <div className="w-full max-w-5xl flex items-center justify-between">
-        <h1 className="text-xl md:text-2xl font-bold">{ko.app.title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl md:text-2xl font-bold">{ko.app.title}</h1>
+          {debugModeEnabled && (
+            <a
+              href="/debug.html"
+              className="inline-flex items-center gap-1 rounded-full bg-slate-800 border border-slate-600 px-3 py-1.5 text-xs md:text-sm font-semibold hover:bg-slate-700 active:bg-slate-700"
+              aria-label="디버그 페이지 열기"
+            >
+              <span aria-hidden="true">🔧</span>
+              <span>debug</span>
+            </a>
+          )}
+        </div>
         <button
           className="h-10 w-10 rounded-full bg-slate-800 border border-slate-600 text-xl leading-none hover:bg-slate-700 active:bg-slate-700"
           onClick={() => openModal('menu')}
