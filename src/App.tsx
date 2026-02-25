@@ -97,22 +97,46 @@ function App() {
     setVirtualInput('left', false)
     setVirtualInput('right', false)
 
-    if (!gameRef.current) {
+    const game = gameRef.current
+    if (!game) {
       return
     }
 
-    if (!gameRef.current.scene.isActive('overworld')) {
-      logOverworldSceneState('overworld scene inactive, starting scene')
-      gameRef.current.scene.start('overworld')
-    } else {
-      logOverworldSceneState('overworld scene active, resume/wake scene')
-      gameRef.current.scene.resume('overworld')
-      gameRef.current.scene.wake('overworld')
+    const restoreOverworldScene = (attempt: 'initial' | 'raf') => {
+      const sceneManager = game.scene
+      const hasOverworld = Boolean(sceneManager.keys?.overworld)
+
+      if (!hasOverworld) {
+        logOverworldSceneState(`overworld scene missing (${attempt}), starting fresh`)
+        sceneManager.start('overworld')
+        return
+      }
+
+      if (!sceneManager.isActive('overworld')) {
+        logOverworldSceneState(`overworld scene inactive (${attempt}), starting scene`)
+        sceneManager.start('overworld')
+      } else {
+        logOverworldSceneState(`overworld scene active (${attempt}), resume/wake scene`)
+        sceneManager.resume('overworld')
+        sceneManager.wake('overworld')
+      }
+
+      const overworldScene = sceneManager.getScene('overworld') as Phaser.Scene
+      overworldScene.scene.setVisible(true)
+      overworldScene.scene.setActive(true)
+      overworldScene.cameras?.main?.setVisible(true)
+
+      game.loop.wake()
+      game.scale.refresh()
+      const renderer = game.renderer as { resize?: (width: number, height: number) => void }
+      renderer.resize?.(game.scale.gameSize.width, game.scale.gameSize.height)
     }
 
+    restoreOverworldScene('initial')
     logOverworldSceneState('overworld scene transition complete')
 
     window.requestAnimationFrame(() => {
+      restoreOverworldScene('raf')
       focusGameCanvas()
     })
   }, [focusGameCanvas, logOverworldSceneState, setVirtualInput])
@@ -121,8 +145,7 @@ function App() {
     logOverworldSceneState('closing oak intro modal')
     markOakIntroSeen()
     closeModal()
-    returnToOverworldInput()
-  }, [closeModal, logOverworldSceneState, markOakIntroSeen, returnToOverworldInput])
+  }, [closeModal, logOverworldSceneState, markOakIntroSeen])
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
   const canOpenShop = nearbyNpc === 'shop'
