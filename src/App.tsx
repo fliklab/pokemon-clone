@@ -233,12 +233,16 @@ function App() {
   }, [collectSceneSnapshot, getRendererLabel])
 
   const encounterText = useMemo(() => {
+    if (battle.active && !battle.trainerBattle) {
+      return battle.message
+    }
+
     if (!lastEncounter) {
       return ko.app.noEncounter
     }
 
     return ko.app.encounterAt(lastEncounter.x, lastEncounter.y)
-  }, [lastEncounter])
+  }, [battle.active, battle.message, battle.trainerBattle, lastEncounter])
 
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
 

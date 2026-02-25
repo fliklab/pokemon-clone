@@ -7,6 +7,7 @@ const WORLD_SCALE = 2
 const BASE_CAMERA_ZOOM = 2
 const PLAYER_SPEED = 140
 const TEXT_SCALE_MULTIPLIER = 1.4
+const WILD_ENCOUNTER_CHANCE = 0.35
 
 const TILE_GROUND = 1
 const TILE_GRASS = 2
@@ -345,7 +346,7 @@ export class OverworldScene extends Phaser.Scene {
       state.triggerTrainerBattle(trainer)
     }
 
-    if (inGrass && !this.wasInGrass) {
+    if (inGrass && !this.wasInGrass && Math.random() < WILD_ENCOUNTER_CHANCE) {
       state.triggerEncounter(tileX, tileY)
     }
 
