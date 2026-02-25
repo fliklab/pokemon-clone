@@ -397,29 +397,42 @@ export const useGameStore = create<GameState>((set, get) => ({
       const battle = state.battle
 
       if (itemId === 'antidote') {
+        const curedPlayer = { ...battle.player, status: 'none' as const }
+        const enemySkill = chooseSkill(battle.enemy)
+        const retaliation = calculateDamage(battle.enemy, curedPlayer, enemySkill.power)
+        const playerAfter = applyDamage(curedPlayer, retaliation)
+
         return {
           itemBag: nextBag,
           potions: nextBag.potion,
           battle: {
             ...battle,
-            player: { ...battle.player, status: 'none' },
-            phase: 'enemy_turn',
-            message: ko.store.antidoteUsed(battle.player.name),
+            player: playerAfter,
+            phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
+            message: `${ko.store.antidoteUsed(battle.player.name)} ${battle.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
+            lastSkillCast: { by: 'enemy', skillId: enemySkill.id, nonce: battle.turn * 3 + 1 },
+            turn: battle.turn + 1,
           },
         }
       }
 
       const healAmount = itemId === 'superPotion' ? 24 : 12
       const healed = Math.min(battle.player.maxHp, battle.player.hp + healAmount)
+      const healedPlayer = { ...battle.player, hp: healed }
+      const enemySkill = chooseSkill(battle.enemy)
+      const retaliation = calculateDamage(battle.enemy, healedPlayer, enemySkill.power)
+      const playerAfter = applyDamage(healedPlayer, retaliation)
 
       return {
         itemBag: nextBag,
         potions: nextBag.potion,
         battle: {
           ...battle,
-          player: { ...battle.player, hp: healed },
-          phase: 'enemy_turn',
-          message: ko.store.bagItemUsed(itemId, battle.player.name),
+          player: playerAfter,
+          phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
+          message: `${ko.store.bagItemUsed(itemId, battle.player.name)} ${battle.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
+          lastSkillCast: { by: 'enemy', skillId: enemySkill.id, nonce: battle.turn * 3 + 1 },
+          turn: battle.turn + 1,
         },
       }
     })

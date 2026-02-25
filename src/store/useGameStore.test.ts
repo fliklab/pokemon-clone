@@ -137,6 +137,33 @@ describe('battle flow endings', () => {
     expect(state.battle.turn).toBe(1)
   })
 
+  it('continues battle flow after using super potion', () => {
+    useGameStore.setState((state) => ({
+      itemBag: {
+        ...state.itemBag,
+        superPotion: 1,
+      },
+      battle: {
+        ...state.battle,
+        active: true,
+        phase: 'player_turn',
+        turn: 1,
+        player: { ...state.party[0], hp: 8, maxHp: 40, defense: 30 },
+        enemy: { ...state.battle.enemy, attack: 1, speed: 1 },
+      },
+    }))
+
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    useGameStore.getState().consumeBagItem('superPotion')
+
+    const state = useGameStore.getState()
+    expect(state.itemBag.superPotion).toBe(0)
+    expect(state.battle.phase).toBe('player_turn')
+    expect(state.battle.turn).toBe(2)
+    expect(state.battle.player.hp).toBeGreaterThan(8)
+    expect(state.battle.player.hp).toBeLessThanOrEqual(state.battle.player.maxHp)
+  })
+
   it('prevents catch when party is full at 6', () => {
     useGameStore.setState((state) => {
       const fullParty = Array.from({ length: 6 }, (_, idx) => ({

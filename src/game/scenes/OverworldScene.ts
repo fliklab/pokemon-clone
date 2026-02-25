@@ -17,6 +17,7 @@ const TILE_WALL = 3
 const TILE_NPC_SHOP = 1
 const TILE_NPC_PC = 2
 const TILE_NPC_OAK = 3
+const TILED_GID_MASK = 0x0fffffff
 
 type NearbyNpc = 'shop' | 'pc' | 'oak' | null
 
@@ -48,6 +49,39 @@ type OverworldDebugSnapshot = {
   cameraScrollY: number
   cameraBounds: CameraDebugSnapshot
   layers: LayerDebugSnapshot[]
+}
+
+type TiledChunk = {
+  width?: unknown
+  height?: unknown
+  data?: unknown
+}
+
+type TiledLayer = {
+  name?: unknown
+  type?: unknown
+  width?: unknown
+  height?: unknown
+  data?: unknown
+  chunks?: unknown
+}
+
+type TiledTileset = {
+  firstgid?: unknown
+  tilecount?: unknown
+  tilewidth?: unknown
+  tileheight?: unknown
+  imagewidth?: unknown
+  imageheight?: unknown
+  margin?: unknown
+  spacing?: unknown
+}
+
+type TiledMapData = {
+  width?: unknown
+  height?: unknown
+  layers?: unknown[]
+  tilesets?: unknown[]
 }
 
 declare global {
@@ -218,7 +252,17 @@ export class OverworldScene extends Phaser.Scene {
       }
 
       const cachedMap = this.extractTiledJson(this.cache.tilemap.get(MAP_KEY))
+      const sanitizeResult = this.sanitizeCachedTilemap(cachedMap)
       const hasValidCachedMap = this.cache.tilemap.exists(MAP_KEY) && this.hasUsableTilemapLayers(cachedMap)
+
+      if (sanitizeResult.patchedValues > 0 || sanitizeResult.invalidSampleGids.length > 0) {
+        console.warn('[overworld] normalized tilemap data before parsing.', {
+          patchedValues: sanitizeResult.patchedValues,
+          invalidSampleGids: sanitizeResult.invalidSampleGids,
+          mapWidth: this.toPositiveInt(cachedMap?.width),
+          mapHeight: this.toPositiveInt(cachedMap?.height),
+        })
+      }
 
       if (!hasValidCachedMap) {
         console.warn('[overworld] tilemap data missing or invalid. Falling back to an empty map.', {
@@ -228,9 +272,25 @@ export class OverworldScene extends Phaser.Scene {
         })
       }
 
-      const map = hasValidCachedMap
-        ? this.make.tilemap({ key: MAP_KEY })
-        : this.make.tilemap({ tileWidth: TILE_SIZE, tileHeight: TILE_SIZE, width: EMPTY_MAP_WIDTH, height: EMPTY_MAP_HEIGHT })
+      let mapBuiltFromKey = false
+      let map: Phaser.Tilemaps.Tilemap | undefined
+
+      if (hasValidCachedMap) {
+        try {
+          map = this.make.tilemap({ key: MAP_KEY })
+          mapBuiltFromKey = Boolean(map)
+        } catch (error) {
+          console.error('[overworld] make.tilemap({ key }) failed. Falling back to manual tile layer build.', {
+            error,
+            mapKey: MAP_KEY,
+          })
+        }
+      }
+
+      if (!map) {
+        map = this.createFallbackTilemap(cachedMap)
+      }
+
       if (!map) {
         this.startFallbackScene('[overworld] make.tilemap returned undefined')
         return
@@ -247,9 +307,16 @@ export class OverworldScene extends Phaser.Scene {
       }
 
       const ensureLayer = (name: string) => {
-        const existing = map.createLayer(name, tiles, 0, 0)
-        if (existing) {
-          return existing.setScale(WORLD_SCALE)
+        if (mapBuiltFromKey) {
+          const existing = map.createLayer(name, tiles, 0, 0)
+          if (existing) {
+            return existing.setScale(WORLD_SCALE)
+          }
+        }
+
+        const rebuilt = this.buildLayerFromCachedData(map, tiles, cachedMap, name)
+        if (rebuilt) {
+          return rebuilt.setScale(WORLD_SCALE)
         }
 
         console.warn('[overworld] expected tile layer is missing. Creating blank fallback layer.', { name })
@@ -401,7 +468,7 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
-  private extractTiledJson(cacheEntry: unknown): { layers?: unknown[] } | null {
+  private extractTiledJson(cacheEntry: unknown): TiledMapData | null {
     if (!cacheEntry || typeof cacheEntry !== 'object') {
       return null
     }
@@ -413,10 +480,10 @@ export class OverworldScene extends Phaser.Scene {
       return null
     }
 
-    return rawData as { layers?: unknown[] }
+    return rawData as TiledMapData
   }
 
-  private hasUsableTilemapLayers(mapData: { layers?: unknown[] } | null): boolean {
+  private hasUsableTilemapLayers(mapData: TiledMapData | null): boolean {
     if (!mapData || !Array.isArray(mapData.layers) || mapData.layers.length === 0) {
       return false
     }
@@ -426,7 +493,7 @@ export class OverworldScene extends Phaser.Scene {
         return false
       }
 
-      const tileLayer = layer as { type?: unknown; data?: unknown; chunks?: unknown }
+      const tileLayer = layer as TiledLayer
       if (tileLayer.type !== 'tilelayer') {
         return false
       }
@@ -435,6 +502,220 @@ export class OverworldScene extends Phaser.Scene {
       const chunksHasTiles = Array.isArray(tileLayer.chunks) && tileLayer.chunks.length > 0
       return dataHasTiles || chunksHasTiles
     })
+  }
+
+  private toPositiveInt(value: unknown): number | null {
+    const parsed = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(parsed)) {
+      return null
+    }
+
+    const normalized = Math.floor(parsed)
+    return normalized > 0 ? normalized : null
+  }
+
+  private normalizeTiledGid(value: unknown): number | null {
+    const parsed = typeof value === 'number' ? value : Number(value)
+    if (!Number.isFinite(parsed)) {
+      return null
+    }
+
+    return (parsed >>> 0) & TILED_GID_MASK
+  }
+
+  private getTilesetGidRanges(mapData: TiledMapData | null): Array<{ start: number; end: number }> {
+    if (!mapData || !Array.isArray(mapData.tilesets)) {
+      return []
+    }
+
+    const ranges: Array<{ start: number; end: number }> = []
+
+    for (const tilesetData of mapData.tilesets) {
+      if (!tilesetData || typeof tilesetData !== 'object') {
+        continue
+      }
+
+      const tileset = tilesetData as TiledTileset
+      const start = this.toPositiveInt(tileset.firstgid)
+      const total = this.toPositiveInt(tileset.tilecount)
+
+      if (!start || !total) {
+        continue
+      }
+
+      ranges.push({ start, end: start + total - 1 })
+    }
+
+    return ranges
+  }
+
+  private hasValidTilesetGid(gid: number, ranges: Array<{ start: number; end: number }>): boolean {
+    for (const range of ranges) {
+      if (gid >= range.start && gid <= range.end) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  private sanitizeCachedTilemap(mapData: TiledMapData | null): { patchedValues: number; invalidSampleGids: number[] } {
+    if (!mapData || !Array.isArray(mapData.layers) || mapData.layers.length === 0) {
+      return { patchedValues: 0, invalidSampleGids: [] }
+    }
+
+    const mapWidth = this.toPositiveInt(mapData.width)
+    const mapHeight = this.toPositiveInt(mapData.height)
+    const tilesetRanges = this.getTilesetGidRanges(mapData)
+    let patchedValues = 0
+    const invalidSampleGids: number[] = []
+
+    const sanitizePayload = (payload: unknown[], expectedLength: number | null) => {
+      if (expectedLength && expectedLength > 0) {
+        if (payload.length > expectedLength) {
+          patchedValues += payload.length - expectedLength
+          payload.length = expectedLength
+        } else if (payload.length < expectedLength) {
+          const padAmount = expectedLength - payload.length
+          for (let i = 0; i < padAmount; i += 1) {
+            payload.push(0)
+          }
+          patchedValues += padAmount
+        }
+      }
+
+      for (let i = 0; i < payload.length; i += 1) {
+        const gid = this.normalizeTiledGid(payload[i])
+
+        if (gid === null) {
+          payload[i] = 0
+          patchedValues += 1
+          continue
+        }
+
+        if (gid > 0 && (tilesetRanges.length === 0 || !this.hasValidTilesetGid(gid, tilesetRanges))) {
+          payload[i] = 0
+          patchedValues += 1
+          if (invalidSampleGids.length < 10 && !invalidSampleGids.includes(gid)) {
+            invalidSampleGids.push(gid)
+          }
+          continue
+        }
+
+        if (typeof payload[i] !== 'number') {
+          payload[i] = gid
+          patchedValues += 1
+        }
+      }
+    }
+
+    for (const layerData of mapData.layers) {
+      if (!layerData || typeof layerData !== 'object') {
+        continue
+      }
+
+      const layer = layerData as TiledLayer
+      if (layer.type !== 'tilelayer') {
+        continue
+      }
+
+      const layerWidth = this.toPositiveInt(layer.width) ?? mapWidth
+      const layerHeight = this.toPositiveInt(layer.height) ?? mapHeight
+      const expectedLayerLength =
+        layerWidth && layerHeight && layerWidth > 0 && layerHeight > 0 ? layerWidth * layerHeight : null
+
+      if (Array.isArray(layer.data)) {
+        sanitizePayload(layer.data, expectedLayerLength)
+      }
+
+      if (!Array.isArray(layer.chunks)) {
+        continue
+      }
+
+      for (const chunkData of layer.chunks) {
+        if (!chunkData || typeof chunkData !== 'object') {
+          continue
+        }
+
+        const chunk = chunkData as TiledChunk
+        if (!Array.isArray(chunk.data)) {
+          continue
+        }
+
+        const chunkWidth = this.toPositiveInt(chunk.width)
+        const chunkHeight = this.toPositiveInt(chunk.height)
+        const expectedChunkLength =
+          chunkWidth && chunkHeight && chunkWidth > 0 && chunkHeight > 0 ? chunkWidth * chunkHeight : null
+        sanitizePayload(chunk.data, expectedChunkLength)
+      }
+    }
+
+    return { patchedValues, invalidSampleGids }
+  }
+
+  private createFallbackTilemap(mapData: TiledMapData | null): Phaser.Tilemaps.Tilemap | undefined {
+    const width = this.toPositiveInt(mapData?.width) ?? EMPTY_MAP_WIDTH
+    const height = this.toPositiveInt(mapData?.height) ?? EMPTY_MAP_HEIGHT
+
+    return this.make.tilemap({
+      tileWidth: TILE_SIZE,
+      tileHeight: TILE_SIZE,
+      width,
+      height,
+    })
+  }
+
+  private buildLayerFromCachedData(
+    map: Phaser.Tilemaps.Tilemap,
+    tiles: Phaser.Tilemaps.Tileset,
+    mapData: TiledMapData | null,
+    layerName: string,
+  ): Phaser.Tilemaps.TilemapLayer | undefined {
+    if (!mapData || !Array.isArray(mapData.layers)) {
+      return undefined
+    }
+
+    const layerData = mapData.layers.find((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return false
+      }
+
+      const layer = entry as TiledLayer
+      return layer.type === 'tilelayer' && layer.name === layerName && Array.isArray(layer.data)
+    })
+
+    if (!layerData || typeof layerData !== 'object') {
+      return undefined
+    }
+
+    const layer = layerData as TiledLayer
+    const payload = Array.isArray(layer.data) ? layer.data : null
+    if (!payload) {
+      return undefined
+    }
+
+    const sourceWidth = this.toPositiveInt(layer.width) ?? map.width
+    const sourceHeight = this.toPositiveInt(layer.height) ?? map.height
+    const rebuiltLayer = map.createBlankLayer(layerName, tiles, 0, 0, map.width, map.height)
+
+    if (!rebuiltLayer) {
+      return undefined
+    }
+
+    const maxY = Math.min(sourceHeight, map.height)
+    const maxX = Math.min(sourceWidth, map.width)
+
+    for (let y = 0; y < maxY; y += 1) {
+      for (let x = 0; x < maxX; x += 1) {
+        const index = y * sourceWidth + x
+        const gid = this.normalizeTiledGid(payload[index]) ?? 0
+        if (gid > 0) {
+          rebuiltLayer.putTileAt(gid, x, y, true)
+        }
+      }
+    }
+
+    return rebuiltLayer
   }
 
   update() {

@@ -16,7 +16,9 @@ type SceneWithLifecycle = Phaser.Scene & {
 }
 
 function ensureSceneObject(scene: SceneWithLifecycle, label: string): SceneWithLifecycle {
-  const isValidScene = typeof scene === 'object' && scene !== null && typeof scene.scene?.key === 'string'
+  // ScenePlugin(`scene`) is injected later; at construction time, key lives on sys.settings.
+  const isValidScene =
+    typeof scene === 'object' && scene !== null && typeof (scene as { sys?: { settings?: { key?: unknown } } }).sys?.settings?.key === 'string'
   if (!isValidScene) {
     throw new Error(`[game-init] ${label} is not a valid Phaser scene object`)
   }
