@@ -6,6 +6,7 @@ import { useGameStore } from '../../store/useGameStore'
 const BASE_GAME_WIDTH = 800
 const BASE_GAME_HEIGHT = 480
 const BASE_TILE_WIDTH = 32
+const TEXT_SCALE_MULTIPLIER = 1.4
 
 type BattleCardUi = {
   container: Phaser.GameObjects.Container
@@ -300,10 +301,10 @@ export class BattleScene extends Phaser.Scene {
 
   private applyBattleTextScale() {
     const tileWidth = this.getTileWidth()
-    this.titleText?.setFontSize(Math.round(tileWidth * 0.6))
-    this.messageText?.setFontSize(Math.round(tileWidth * 0.55))
+    this.titleText?.setFontSize(Math.round(tileWidth * 0.6 * TEXT_SCALE_MULTIPLIER))
+    this.messageText?.setFontSize(Math.round(tileWidth * 0.55 * TEXT_SCALE_MULTIPLIER))
 
-    const cardFont = Math.max(11, Math.round(tileWidth * 0.42))
+    const cardFont = Math.max(Math.round(11 * TEXT_SCALE_MULTIPLIER), Math.round(tileWidth * 0.42 * TEXT_SCALE_MULTIPLIER))
     this.playerCard?.nameLabel.setFontSize(cardFont + 2)
     this.enemyCard?.nameLabel.setFontSize(cardFont + 2)
     this.playerCard?.hpText.setFontSize(cardFont)

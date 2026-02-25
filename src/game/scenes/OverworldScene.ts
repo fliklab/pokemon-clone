@@ -6,6 +6,7 @@ const TILE_SIZE = 16
 const WORLD_SCALE = 2
 const BASE_CAMERA_ZOOM = 2
 const PLAYER_SPEED = 140
+const TEXT_SCALE_MULTIPLIER = 1.4
 
 const TILE_GROUND = 1
 const TILE_GRASS = 2
@@ -369,7 +370,7 @@ export class OverworldScene extends Phaser.Scene {
   private applyOverworldTextScale() {
     const responsiveScale = Math.min(this.scale.width / 800, this.scale.height / 480)
     const tileWidth = TILE_SIZE * WORLD_SCALE * responsiveScale
-    const fontSize = Math.max(10, Math.round(tileWidth * 0.55))
+    const fontSize = Math.max(Math.round(10 * TEXT_SCALE_MULTIPLIER), Math.round(tileWidth * 0.55 * TEXT_SCALE_MULTIPLIER))
     this.shopLabelText?.setFontSize(fontSize)
     this.pcLabelText?.setFontSize(fontSize)
   }
