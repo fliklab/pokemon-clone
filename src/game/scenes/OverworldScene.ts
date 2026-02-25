@@ -41,6 +41,8 @@ export class OverworldScene extends Phaser.Scene {
   private interactKey?: Phaser.Input.Keyboard.Key
   private shopLabelText?: Phaser.GameObjects.Text
   private pcLabelText?: Phaser.GameObjects.Text
+  private oakLabelText?: Phaser.GameObjects.Text
+  private oakSprite?: Phaser.GameObjects.Image
   private wasInGrass = false
   private lastFacingDirection: 'down' | 'up' | 'left' | 'right' = 'down'
   private walkFrameCursor = 0
@@ -57,6 +59,7 @@ export class OverworldScene extends Phaser.Scene {
   create() {
     this.createTilesTexture()
     this.createPlayerFrameTextures()
+    this.createOakNpcTexture()
 
     const map = this.make.tilemap({ key: 'overworld-map' })
     const tiles = map.addTilesetImage('overworld', 'overworld-tiles')
@@ -86,6 +89,7 @@ export class OverworldScene extends Phaser.Scene {
 
     const shopNpc = this.findNpcTile(1)
     const pcNpc = this.findNpcTile(2)
+    const oakNpc = this.findNpcTile(4)
 
     if (shopNpc) {
       this.shopLabelText = this.add.text(
@@ -117,6 +121,32 @@ export class OverworldScene extends Phaser.Scene {
       )
     }
 
+
+    if (oakNpc) {
+      this.oakSprite = this.add.image(
+        (oakNpc.x + 0.5) * TILE_SIZE * WORLD_SCALE,
+        (oakNpc.y + 1) * TILE_SIZE * WORLD_SCALE,
+        'npc-oak',
+      )
+      this.oakSprite.setOrigin(0.5, 1)
+      this.oakSprite.setScale(WORLD_SCALE)
+      this.oakSprite.setDepth(11)
+
+      this.oakLabelText = this.add.text(
+        (oakNpc.x - 0.2) * TILE_SIZE * WORLD_SCALE,
+        (oakNpc.y - 0.45) * TILE_SIZE * WORLD_SCALE,
+        ko.overworld.oakLabel,
+        {
+          color: '#f8fafc',
+          fontSize: '10px',
+          align: 'center',
+          backgroundColor: '#00000088',
+          padding: { x: 2, y: 1 },
+        },
+      )
+      this.oakLabelText.setDepth(20)
+    }
+
     this.player.setOrigin(0.5, 1)
     this.player.setScale(WORLD_SCALE)
     this.player.setDepth(10)
@@ -141,7 +171,11 @@ export class OverworldScene extends Phaser.Scene {
       this.scale.off('resize', this.updateCameraZoom, this)
       this.scale.off('resize', this.applyOverworldTextScale, this)
       this.debugMoveGraphics?.destroy()
+      this.oakSprite?.destroy()
+      this.oakLabelText?.destroy()
       this.debugMoveGraphics = undefined
+      this.oakSprite = undefined
+      this.oakLabelText = undefined
       this.lastDebugTile = undefined
     })
 
@@ -431,6 +465,7 @@ export class OverworldScene extends Phaser.Scene {
     const fontSize = Math.max(Math.round(10 * TEXT_SCALE_MULTIPLIER), Math.round(tileWidth * 0.55 * TEXT_SCALE_MULTIPLIER))
     this.shopLabelText?.setFontSize(fontSize)
     this.pcLabelText?.setFontSize(fontSize)
+    this.oakLabelText?.setFontSize(fontSize)
   }
 
   private createTilesTexture() {
@@ -524,6 +559,33 @@ export class OverworldScene extends Phaser.Scene {
       drawFrame(`player-${direction}-0`, direction, 0)
       drawFrame(`player-${direction}-1`, direction, 1)
     }
+  }
+
+
+  private createOakNpcTexture() {
+    if (this.textures.exists('npc-oak')) {
+      return
+    }
+
+    const graphics = this.add.graphics({ x: 0, y: 0 })
+    graphics.fillStyle(0x111827)
+    graphics.fillRect(2, 2, 8, 4)
+
+    graphics.fillStyle(0xe5e7eb)
+    graphics.fillRect(1, 6, 10, 5)
+    graphics.fillStyle(0x374151)
+    graphics.fillRect(4, 7, 1, 1)
+    graphics.fillRect(7, 7, 1, 1)
+
+    graphics.fillStyle(0xffffff)
+    graphics.fillRect(0, 10, 12, 4)
+
+    graphics.fillStyle(0x1f2937)
+    graphics.fillRect(1, 14, 4, 2)
+    graphics.fillRect(7, 14, 4, 2)
+
+    graphics.generateTexture('npc-oak', 12, 16)
+    graphics.destroy()
   }
 
   private updatePlayerAnimation(velocityX: number, velocityY: number) {

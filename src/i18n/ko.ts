@@ -59,9 +59,9 @@ export const ko = {
       newGame: '새 게임 시작',
       newGameConfirmTitle: '새 게임을 시작할까요?',
       newGameConfirmDesc: '현재 진행 상황을 초기화하고 처음부터 다시 시작합니다.',
-      oakTitle: '오박사 인트로',
-      oakIntro: '안녕! 나는 오박사다. 풀숲에서 야생 포켓몬을 만나고, 상점과 PC를 활용해 모험을 이어가거라!',
-      startAdventure: '모험 시작!',
+      oakTitle: '오박사',
+      oakIntro: '안녕! 나는 오박사다. 풀숲에서 야생 포켓몬을 만나고, 상점과 PC를 활용해 모험을 이어가 보자!',
+      startAdventure: '대화 닫기',
       confirmSaveTitle: '게임을 저장할까요?',
       confirmSaveDesc: 'localStorage에 현재 파티/돈/아이템/진행도를 저장합니다.',
       confirm: '확인',
@@ -78,6 +78,7 @@ export const ko = {
   overworld: {
     shopLabel: '상점\n(2,2)',
     pcLabel: 'PC\n(3,2)',
+    oakLabel: '오박사\n(5,2)',
   },
   battleScene: {
     title: '배틀 씬',
