@@ -7,6 +7,24 @@ const BASE_GAME_WIDTH = 800
 const BASE_GAME_HEIGHT = 480
 const BASE_TILE_WIDTH = 32
 
+type BattleCardUi = {
+  container: Phaser.GameObjects.Container
+  frame: Phaser.GameObjects.Rectangle
+  nameLabel: Phaser.GameObjects.Text
+  levelLabel: Phaser.GameObjects.Text
+  hpText: Phaser.GameObjects.Text
+  expText: Phaser.GameObjects.Text
+  hpTrack: Phaser.GameObjects.Rectangle
+  hpFill: Phaser.GameObjects.Rectangle
+  expTrack: Phaser.GameObjects.Rectangle
+  expFill: Phaser.GameObjects.Rectangle
+  icon: Phaser.GameObjects.Text
+  statusChip: Phaser.GameObjects.Text
+  faintOverlay: Phaser.GameObjects.Rectangle
+  sparkle: Phaser.GameObjects.Text
+  turnBadge: Phaser.GameObjects.Text
+}
+
 export class BattleScene extends Phaser.Scene {
   private unsub?: () => void
   private endTimer?: Phaser.Time.TimerEvent
@@ -14,9 +32,10 @@ export class BattleScene extends Phaser.Scene {
   private playerSprite?: Phaser.GameObjects.Text
   private enemySprite?: Phaser.GameObjects.Text
   private titleText?: Phaser.GameObjects.Text
-  private playerHpLabel?: Phaser.GameObjects.Text
-  private enemyHpLabel?: Phaser.GameObjects.Text
   private messageText?: Phaser.GameObjects.Text
+  private playerCard?: BattleCardUi
+  private enemyCard?: BattleCardUi
+  private partyContainer?: Phaser.GameObjects.Container
   private phaseCursor = ''
   private currentMessage = ''
   private lastSkillNonce = -1
@@ -31,18 +50,22 @@ export class BattleScene extends Phaser.Scene {
     this.add.rectangle(400, 350, 250, 100, 0x334155)
     this.add.rectangle(650, 130, 180, 80, 0x475569)
 
-    this.playerSprite = this.add.text(300, 320, '🧢', { fontSize: '48px' })
-    this.enemySprite = this.add.text(630, 95, '🐾', { fontSize: '42px' })
+    this.playerSprite = this.add.text(300, 320, '🧢', { fontSize: '48px' }).setDepth(4)
+    this.enemySprite = this.add.text(630, 95, '🐾', { fontSize: '42px' }).setDepth(4)
 
     this.titleText = this.add.text(40, 30, ko.battleScene.title, { color: '#e2e8f0', fontSize: '24px' })
 
-    this.playerHpLabel = this.add.text(100, 290, '', { color: '#e2e8f0', fontSize: '14px' })
-    this.enemyHpLabel = this.add.text(560, 50, '', { color: '#e2e8f0', fontSize: '14px' })
+    this.playerCard = this.createBattleCard(36, 242, true)
+    this.enemyCard = this.createBattleCard(482, 26, false)
 
-    this.add.rectangle(170, 314, 180, 12, 0x0f172a).setOrigin(0, 0.5)
-    this.add.rectangle(560, 74, 180, 12, 0x0f172a).setOrigin(0, 0.5)
-    const playerHpFill = this.add.rectangle(170, 314, 180, 12, 0x22c55e).setOrigin(0, 0.5)
-    const enemyHpFill = this.add.rectangle(560, 74, 180, 12, 0x22c55e).setOrigin(0, 0.5)
+    this.partyContainer = this.add.container(22, 14)
+    const partyFrame = this.add.rectangle(0, 0, 190, 70, 0x0f172a, 0.66).setOrigin(0, 0)
+    partyFrame.setStrokeStyle(1, 0x64748b, 0.8)
+    const partyTitle = this.add.text(12, 8, '파티 HUD', { color: '#94a3b8', fontSize: '12px' })
+    const partyIcon = this.add.text(12, 26, '🎒', { fontSize: '18px' })
+    const partyHint = this.add.text(38, 30, '상태 효과/경험치 실시간 반영', { color: '#cbd5e1', fontSize: '11px' })
+    this.partyContainer.add([partyFrame, partyTitle, partyIcon, partyHint])
+    this.partyContainer.setDepth(8)
 
     this.messageText = this.add.text(40, 420, '', {
       color: '#f8fafc',
@@ -64,16 +87,30 @@ export class BattleScene extends Phaser.Scene {
       }
 
       this.updateTypewriter(battle.message)
-      this.playerHpLabel?.setText(`${battle.player.name} HP ${battle.player.hp}/${battle.player.maxHp}`)
-      this.enemyHpLabel?.setText(`${battle.enemy.name} HP ${battle.enemy.hp}/${battle.enemy.maxHp}`)
+      this.syncBattleCard(this.playerCard, {
+        name: battle.player.name,
+        level: battle.player.level,
+        hp: battle.player.hp,
+        maxHp: battle.player.maxHp,
+        exp: state.party[0]?.exp ?? 0,
+        nextLevelExp: state.party[0]?.nextLevelExp ?? 1,
+        status: battle.player.status,
+        isTurn: battle.phase === 'player_turn',
+        isTrainer: false,
+      })
+      this.syncBattleCard(this.enemyCard, {
+        name: battle.enemy.name,
+        level: battle.enemy.level,
+        hp: battle.enemy.hp,
+        maxHp: battle.enemy.maxHp,
+        exp: 0,
+        nextLevelExp: 1,
+        status: battle.enemy.status,
+        isTurn: battle.phase === 'enemy_turn',
+        isTrainer: Boolean(battle.trainerBattle),
+      })
 
-      const playerRatio = Phaser.Math.Clamp(battle.player.hp / battle.player.maxHp, 0, 1)
-      const enemyRatio = Phaser.Math.Clamp(battle.enemy.hp / battle.enemy.maxHp, 0, 1)
-      playerHpFill.width = 180 * playerRatio
-      enemyHpFill.width = 180 * enemyRatio
-      playerHpFill.fillColor = playerRatio > 0.5 ? 0x22c55e : playerRatio > 0.2 ? 0xf59e0b : 0xef4444
-      enemyHpFill.fillColor = enemyRatio > 0.5 ? 0x22c55e : enemyRatio > 0.2 ? 0xf59e0b : 0xef4444
-
+      this.applyMinorPolishes(battle.phase)
       this.applyPlaceholders(battle.phase)
       this.applySkillCastFx(battle.lastSkillCast)
 
@@ -99,6 +136,162 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
+  private createBattleCard(x: number, y: number, playerSide: boolean): BattleCardUi {
+    const container = this.add.container(x, y)
+    const frame = this.add.rectangle(0, 0, 286, 118, 0x0f172a, 0.88).setOrigin(0, 0)
+    frame.setStrokeStyle(2, playerSide ? 0x22c55e : 0x60a5fa, 0.9)
+    const icon = this.add.text(12, 10, playerSide ? '🟢' : '🔵', { fontSize: '16px' })
+    const nameLabel = this.add.text(36, 10, '-', { color: '#e2e8f0', fontSize: '15px' })
+    const levelLabel = this.add.text(224, 10, 'Lv.1', { color: '#fef08a', fontSize: '13px' })
+    const hpText = this.add.text(12, 36, 'HP 0/0', { color: '#cbd5e1', fontSize: '12px' })
+    const expText = this.add.text(12, 74, 'EXP 0/1', { color: '#93c5fd', fontSize: '12px' })
+
+    const hpTrack = this.add.rectangle(12, 58, 252, 12, 0x1e293b).setOrigin(0, 0.5)
+    const hpFill = this.add.rectangle(12, 58, 252, 12, 0x22c55e).setOrigin(0, 0.5)
+    const expTrack = this.add.rectangle(12, 96, 252, 8, 0x1e293b).setOrigin(0, 0.5)
+    const expFill = this.add.rectangle(12, 96, 252, 8, 0x38bdf8).setOrigin(0, 0.5)
+
+    const statusChip = this.add.text(210, 35, '정상', {
+      color: '#0f172a',
+      backgroundColor: '#86efac',
+      fontSize: '11px',
+      padding: { x: 6, y: 2 },
+    })
+
+    const faintOverlay = this.add.rectangle(0, 0, 286, 118, 0x020617, 0).setOrigin(0, 0)
+    const sparkle = this.add.text(260, 84, '✨', { fontSize: '14px' }).setAlpha(0)
+    const turnBadge = this.add.text(228, 84, '턴', {
+      color: '#ffffff',
+      backgroundColor: '#1d4ed8',
+      fontSize: '10px',
+      padding: { x: 4, y: 1 },
+    }).setAlpha(0.15)
+
+    container.add([
+      frame,
+      icon,
+      nameLabel,
+      levelLabel,
+      hpText,
+      hpTrack,
+      hpFill,
+      expText,
+      expTrack,
+      expFill,
+      statusChip,
+      faintOverlay,
+      sparkle,
+      turnBadge,
+    ])
+
+    return {
+      container,
+      frame,
+      nameLabel,
+      levelLabel,
+      hpText,
+      expText,
+      hpTrack,
+      hpFill,
+      expTrack,
+      expFill,
+      icon,
+      statusChip,
+      faintOverlay,
+      sparkle,
+      turnBadge,
+    }
+  }
+
+  private syncBattleCard(
+    card: BattleCardUi | undefined,
+    model: {
+      name: string
+      level: number
+      hp: number
+      maxHp: number
+      exp: number
+      nextLevelExp: number
+      status: 'none' | 'burn' | 'poison'
+      isTurn: boolean
+      isTrainer: boolean
+    },
+  ) {
+    if (!card) {
+      return
+    }
+
+    const hpRatio = Phaser.Math.Clamp(model.hp / Math.max(1, model.maxHp), 0, 1)
+    const expRatio = Phaser.Math.Clamp(model.exp / Math.max(1, model.nextLevelExp), 0, 1)
+
+    card.nameLabel.setText(model.name)
+    card.levelLabel.setText(`Lv.${model.level}`)
+    card.hpText.setText(`HP ${model.hp}/${model.maxHp}`)
+    card.expText.setText(`EXP ${model.exp}/${model.nextLevelExp}`)
+
+    card.hpFill.width = 252 * hpRatio
+    card.expFill.width = 252 * expRatio
+
+    card.hpFill.fillColor = hpRatio > 0.5 ? 0x22c55e : hpRatio > 0.2 ? 0xf59e0b : 0xef4444
+    card.frame.setStrokeStyle(2, model.level >= 8 ? 0xfacc15 : model.isTrainer ? 0x93c5fd : 0x22c55e, 0.95)
+
+    const statusUi = this.resolveStatusUi(model.status)
+    card.statusChip.setText(statusUi.label)
+    card.statusChip.setBackgroundColor(statusUi.bg)
+    card.statusChip.setColor(statusUi.color)
+
+    card.faintOverlay.setAlpha(model.hp <= 0 ? 0.7 : 0)
+    card.turnBadge.setAlpha(model.isTurn ? 1 : 0.15)
+
+    const sparkleVisible = model.level >= 8 || (model.exp > 0 && expRatio > 0.9)
+    card.sparkle.setAlpha(sparkleVisible ? 1 : 0)
+
+    if (sparkleVisible) {
+      this.tweens.add({
+        targets: card.sparkle,
+        y: 84,
+        alpha: { from: 0.25, to: 1 },
+        duration: 700,
+        yoyo: true,
+        repeat: 0,
+      })
+    }
+  }
+
+  private resolveStatusUi(status: 'none' | 'burn' | 'poison') {
+    if (status === 'burn') {
+      return { label: '화상', bg: '#fb7185', color: '#ffffff' }
+    }
+    if (status === 'poison') {
+      return { label: '중독', bg: '#c084fc', color: '#ffffff' }
+    }
+    return { label: '정상', bg: '#86efac', color: '#0f172a' }
+  }
+
+  private applyMinorPolishes(phase: string) {
+    if (!this.playerSprite || !this.enemySprite) {
+      return
+    }
+
+    if (phase === 'player_turn') {
+      this.tweens.add({ targets: this.playerSprite, scale: 1.08, yoyo: true, duration: 180 }) // 턴 강조
+      return
+    }
+
+    if (phase === 'enemy_turn') {
+      this.tweens.add({ targets: this.enemySprite, scale: 1.1, yoyo: true, duration: 180 }) // 적 턴 강조
+      return
+    }
+
+    if (phase === 'lost') {
+      this.playerSprite.setTint(0x475569) // 빈사 톤다운
+      return
+    }
+
+    this.playerSprite.clearTint()
+    this.enemySprite.clearTint()
+  }
+
   private getTileWidth() {
     const widthTile = this.scale.width / (BASE_GAME_WIDTH / BASE_TILE_WIDTH)
     const heightTile = this.scale.height / (BASE_GAME_HEIGHT / BASE_TILE_WIDTH)
@@ -108,9 +301,15 @@ export class BattleScene extends Phaser.Scene {
   private applyBattleTextScale() {
     const tileWidth = this.getTileWidth()
     this.titleText?.setFontSize(Math.round(tileWidth * 0.6))
-    this.playerHpLabel?.setFontSize(Math.round(tileWidth * 0.5))
-    this.enemyHpLabel?.setFontSize(Math.round(tileWidth * 0.5))
     this.messageText?.setFontSize(Math.round(tileWidth * 0.55))
+
+    const cardFont = Math.max(11, Math.round(tileWidth * 0.42))
+    this.playerCard?.nameLabel.setFontSize(cardFont + 2)
+    this.enemyCard?.nameLabel.setFontSize(cardFont + 2)
+    this.playerCard?.hpText.setFontSize(cardFont)
+    this.enemyCard?.hpText.setFontSize(cardFont)
+    this.playerCard?.expText.setFontSize(cardFont)
+    this.enemyCard?.expText.setFontSize(cardFont)
   }
 
   private updateTypewriter(nextMessage: string) {
@@ -281,9 +480,10 @@ export class BattleScene extends Phaser.Scene {
     this.typingTimer?.remove(false)
     this.typingTimer = undefined
     this.titleText = undefined
-    this.playerHpLabel = undefined
-    this.enemyHpLabel = undefined
     this.messageText = undefined
+    this.playerCard = undefined
+    this.enemyCard = undefined
+    this.partyContainer = undefined
     this.currentMessage = ''
     this.lastSkillNonce = -1
   }
