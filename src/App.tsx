@@ -114,6 +114,22 @@ function App() {
   const toggleDebugMode = useGameStore((state) => state.toggleDebugMode)
   const debugRouteMode: DebugRouteMode = window.__debugRouteMode ?? null
 
+  const isIgnorablePhaserCleanupError = useCallback((error: unknown) => {
+    if (!(error instanceof Error)) {
+      return false
+    }
+
+    const normalized = `${error.name} ${error.message}`.toLowerCase()
+
+    return (
+      normalized.includes('audiocontext') ||
+      normalized.includes('audio context') ||
+      normalized.includes('webgl') ||
+      normalized.includes('context lost') ||
+      normalized.includes('object has been destroyed')
+    )
+  }, [])
+
   const focusGameCanvas = useCallback(() => {
     gameCanvasContainerRef.current?.focus()
   }, [])
@@ -202,6 +218,8 @@ function App() {
   }, [traceOakFlow])
 
   useEffect(() => {
+    let frame: number | null = null
+
     if (!gameRef.current) {
       const mountNode = gameCanvasContainerRef.current
 
@@ -229,24 +247,45 @@ function App() {
         )
       } catch (error) {
         console.error('[game-init] createGame failed in App', { error })
+        setSceneReady(false)
         return
       }
     }
 
-    const frame = window.requestAnimationFrame(() => {
-      focusGameCanvas()
-    })
+    try {
+      frame = window.requestAnimationFrame(() => {
+        focusGameCanvas()
+      })
+    } catch (error) {
+      console.warn('[game-init] requestAnimationFrame failed', { error })
+    }
 
     return () => {
-      window.cancelAnimationFrame(frame)
-      gameRef.current?.destroy(true)
+      if (frame !== null) {
+        try {
+          window.cancelAnimationFrame(frame)
+        } catch {
+          // silent cleanup: strict mode unmount/remount race guard
+        }
+      }
+
+      const game = gameRef.current
       gameRef.current = null
-      setSceneReady(false)
-      setGameError(null)
-      setWarningMessage(null)
-      setErrorDismissed(false)
+
+      try {
+        game?.destroy(true)
+      } catch (error) {
+        if (!isIgnorablePhaserCleanupError(error)) {
+          console.warn('[game-cleanup] Phaser destroy failed', { error })
+        }
+      } finally {
+        setSceneReady(false)
+        setGameError(null)
+        setWarningMessage(null)
+        setErrorDismissed(false)
+      }
     }
-  }, [focusGameCanvas, setSceneReady])
+  }, [focusGameCanvas, isIgnorablePhaserCleanupError, setSceneReady])
 
   useEffect(() => {
     const updateRuntimeSnapshot = () => {
