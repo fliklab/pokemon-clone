@@ -9,6 +9,20 @@ import { useGameStore } from './store/useGameStore'
 
 type ModalType = 'menu' | 'party' | 'inventory' | 'shop' | 'pc' | 'save' | 'save-confirm' | 'new-game-confirm' | 'oak-dialog' | null
 
+type SceneSnapshot = {
+  key: string
+  active: boolean
+  visible: boolean
+  sleeping: boolean
+  paused: boolean
+}
+
+declare global {
+  interface Window {
+    __oakFlowTrace?: Array<Record<string, unknown>>
+  }
+}
+
 function App() {
   const gameRef = useRef<Phaser.Game | null>(null)
   const gameCanvasContainerRef = useRef<HTMLDivElement | null>(null)
@@ -40,6 +54,77 @@ function App() {
     gameCanvasContainerRef.current?.focus()
   }, [])
 
+  const collectSceneSnapshot = useCallback((): SceneSnapshot[] => {
+    const game = gameRef.current
+    if (!game) {
+      return []
+    }
+
+    return game.scene.getScenes(false).map((scene) => ({
+      key: scene.scene.key,
+      active: scene.scene.isActive(),
+      visible: scene.scene.isVisible(),
+      sleeping: scene.scene.isSleeping(),
+      paused: scene.scene.isPaused(),
+    }))
+  }, [])
+
+  const traceOakFlow = useCallback((stage: string, details: Record<string, unknown> = {}) => {
+    const payload = {
+      stage,
+      at: new Date().toISOString(),
+      renderer: gameRef.current?.renderer?.type,
+      sceneSnapshot: collectSceneSnapshot(),
+      ...details,
+    }
+
+    window.__oakFlowTrace = [...(window.__oakFlowTrace ?? []), payload]
+    console.info('[oak-flow]', JSON.stringify(payload))
+  }, [collectSceneSnapshot])
+
+  const restoreOverworldRenderer = useCallback(() => {
+    const game = gameRef.current
+    if (!game) {
+      return
+    }
+
+    try {
+      const manager = game.scene
+
+      if (manager.isActive('battle')) {
+        manager.stop('battle')
+      }
+
+      if (!manager.isActive('overworld')) {
+        manager.start('overworld')
+      } else {
+        manager.run('overworld')
+        manager.wake('overworld')
+        manager.resume('overworld')
+      }
+
+      manager.bringToTop('overworld')
+      game.scale.refresh()
+
+      const canvasBounds = gameCanvasContainerRef.current?.getBoundingClientRect()
+      if (canvasBounds && canvasBounds.width > 0 && canvasBounds.height > 0) {
+        game.scale.resize(Math.floor(canvasBounds.width), Math.floor(canvasBounds.height))
+      }
+
+      game.loop.step(16.67)
+      window.requestAnimationFrame(() => {
+        game.loop.step(16.67)
+        window.requestAnimationFrame(() => {
+          game.loop.step(16.67)
+        })
+      })
+    } catch (error) {
+      traceOakFlow('restore-failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }, [traceOakFlow])
+
   useEffect(() => {
     if (!gameRef.current) {
       gameRef.current = createGame('game-root', () => setSceneReady(true))
@@ -68,11 +153,20 @@ function App() {
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
 
   const closeModal = useCallback(() => {
+    const wasOakDialog = activeModal === 'oak-dialog'
+    if (wasOakDialog) {
+      traceOakFlow('oak-close-clicked')
+    }
+
     setActiveModal(null)
     window.requestAnimationFrame(() => {
       focusGameCanvas()
+      if (wasOakDialog) {
+        restoreOverworldRenderer()
+        traceOakFlow('oak-close-restored')
+      }
     })
-  }, [focusGameCanvas])
+  }, [activeModal, focusGameCanvas, restoreOverworldRenderer, traceOakFlow])
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
   const canOpenShop = nearbyNpc === 'shop'
@@ -99,12 +193,15 @@ function App() {
 
     const frame = window.requestAnimationFrame(() => {
       setActiveModal(modal)
+      if (modal === 'oak-dialog') {
+        traceOakFlow('oak-modal-open')
+      }
     })
 
     return () => {
       window.cancelAnimationFrame(frame)
     }
-  }, [interactionNonce, nearbyNpc])
+  }, [interactionNonce, nearbyNpc, traceOakFlow])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
