@@ -354,7 +354,7 @@ function App() {
               <p>캔버스: {debugRuntime.canvasWidth}×{debugRuntime.canvasHeight}</p>
             </div>
 
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
+            <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
               <p className="text-cyan-200 font-semibold">맵 렌더 진단</p>
               {debugRuntime.overworld ? (
                 <>
@@ -364,8 +364,13 @@ function App() {
                   <p>카메라 bounds: {Math.round(debugRuntime.overworld.cameraBounds.x)}, {Math.round(debugRuntime.overworld.cameraBounds.y)} / {Math.round(debugRuntime.overworld.cameraBounds.width)}×{Math.round(debugRuntime.overworld.cameraBounds.height)}</p>
                   <div className="space-y-1">
                     {debugRuntime.overworld.layers.map((layer) => (
-                      <p key={layer.name}>
-                        {layer.name} · exists:{layer.exists ? 'Y' : 'N'} · visible:{layer.visible ? 'Y' : 'N'} · alpha:{layer.alpha.toFixed(2)} · depth:{layer.depth} · tint:#{layer.tint.toString(16).padStart(6, '0')}
+                      <p key={layer.name} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        <span className="break-all">{layer.name}</span>
+                        <span>exists:{layer.exists ? 'Y' : 'N'}</span>
+                        <span>visible:{layer.visible ? 'Y' : 'N'}</span>
+                        <span>alpha:{layer.alpha.toFixed(2)}</span>
+                        <span>depth:{layer.depth}</span>
+                        <span>tint:#{layer.tint.toString(16).padStart(6, '0')}</span>
                       </p>
                     ))}
                   </div>
@@ -382,13 +387,17 @@ function App() {
               <p>상호작용 nonce: {interactionNonce}</p>
             </div>
 
-            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
+            <div className="min-w-0 rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
               <p className="text-cyan-200 font-semibold">씬 스냅샷</p>
               {debugRuntime.scenes.length > 0 ? (
                 <div className="space-y-1">
                   {debugRuntime.scenes.map((scene) => (
-                    <p key={scene.key}>
-                      {scene.key} · active:{scene.active ? 'Y' : 'N'} · visible:{scene.visible ? 'Y' : 'N'} · sleep:{scene.sleeping ? 'Y' : 'N'} · pause:{scene.paused ? 'Y' : 'N'}
+                    <p key={scene.key} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                      <span className="break-all">{scene.key}</span>
+                      <span>active:{scene.active ? 'Y' : 'N'}</span>
+                      <span>visible:{scene.visible ? 'Y' : 'N'}</span>
+                      <span>sleep:{scene.sleeping ? 'Y' : 'N'}</span>
+                      <span>pause:{scene.paused ? 'Y' : 'N'}</span>
                     </p>
                   ))}
                 </div>
