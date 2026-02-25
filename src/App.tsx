@@ -112,6 +112,7 @@ function App() {
         ref={gameCanvasContainerRef}
         tabIndex={0}
         className="border border-slate-700 rounded overflow-hidden w-full max-w-5xl aspect-[5/3] focus:outline-none focus:ring-2 focus:ring-violet-500"
+        style={{ touchAction: 'none' }}
         aria-label="게임 화면"
       >
         <div id="game-root" className="w-full h-full" />
@@ -293,8 +294,8 @@ function BaseModal({ open, onClose, title, children }: BaseModalProps) {
   return (
     <Dialog open={open} onClose={onClose} className="relative z-[70]">
       <DialogBackdrop className="fixed inset-0 bg-black/60" />
-      <div className="fixed inset-0 flex items-end md:items-center justify-center p-2 md:p-4">
-        <DialogPanel className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl">
+      <div className="fixed inset-0 flex items-end md:items-center justify-center p-2 md:p-4" style={{ touchAction: 'none' }}>
+        <DialogPanel className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-slate-700 bg-slate-900 p-4 shadow-2xl" style={{ touchAction: 'manipulation' }}>
           <div className="flex items-center justify-between mb-3">
             <DialogTitle className="font-semibold">{title}</DialogTitle>
             <button className="text-xs px-2 py-1 rounded bg-slate-700" onClick={onClose}>{ko.app.menu.close}</button>
@@ -338,14 +339,18 @@ function DirectionButton({ direction, label, onInput }: DirectionButtonProps) {
       style={{ touchAction: 'none' }}
       onPointerDown={(event) => {
         event.preventDefault()
+        event.currentTarget.setPointerCapture(event.pointerId)
         onInput(direction, true)
       }}
       onPointerUp={(event) => {
         event.preventDefault()
+        event.currentTarget.releasePointerCapture(event.pointerId)
         onInput(direction, false)
       }}
-      onPointerCancel={() => onInput(direction, false)}
-      onPointerLeave={() => onInput(direction, false)}
+      onPointerCancel={(event) => {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+        onInput(direction, false)
+      }}
       onContextMenu={(event) => event.preventDefault()}
     >
       {label}
