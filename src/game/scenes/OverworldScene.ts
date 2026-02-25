@@ -14,6 +14,32 @@ const TILE_WALL = 3
 
 type NearbyNpc = 'shop' | 'pc' | 'oak' | null
 
+type LayerDebugSnapshot = {
+  name: string
+  exists: boolean
+  visible: boolean
+  depth: number
+}
+
+type OverworldDebugSnapshot = {
+  mapKey: string
+  mapLoaded: boolean
+  widthTiles: number
+  heightTiles: number
+  widthPixels: number
+  heightPixels: number
+  cameraZoom: number
+  cameraScrollX: number
+  cameraScrollY: number
+  layers: LayerDebugSnapshot[]
+}
+
+declare global {
+  interface Window {
+    __overworldDebug?: OverworldDebugSnapshot
+  }
+}
+
 const trainerPositions: Record<string, { x: number; y: number }> = {
   'junior-mia': { x: 9, y: 4 },
   'ace-ryu': { x: 10, y: 6 },
@@ -28,6 +54,9 @@ const trainerVisionTiles: Record<string, string> = {
   '9,5': 'leader-nova',
   '9,6': 'leader-nova',
 }
+
+const MAP_KEY = 'overworld-map'
+const MAP_URL = `${import.meta.env.BASE_URL}maps/overworld.json`
 
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -47,34 +76,55 @@ export class OverworldScene extends Phaser.Scene {
   private lastFacingDirection: 'down' | 'up' | 'left' | 'right' = 'down'
   private walkFrameCursor = 0
   private warpCooldownUntil = 0
+  private mapDebug: OverworldDebugSnapshot = {
+    mapKey: MAP_KEY,
+    mapLoaded: false,
+    widthTiles: 0,
+    heightTiles: 0,
+    widthPixels: 0,
+    heightPixels: 0,
+    cameraZoom: 0,
+    cameraScrollX: 0,
+    cameraScrollY: 0,
+    layers: [],
+  }
 
   constructor() {
     super('overworld')
   }
 
   preload() {
-    this.load.tilemapTiledJSON('overworld-map', '/maps/overworld.json')
+    this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
   }
 
   create() {
+    this.cameras.main.setBackgroundColor('#1f2937')
     this.createTilesTexture()
     this.createPlayerFrameTextures()
     this.createOakNpcTexture()
 
-    const map = this.make.tilemap({ key: 'overworld-map' })
+    if (!this.cache.tilemap.exists(MAP_KEY)) {
+      throw new Error(`[overworld] Failed to load tilemap JSON: ${MAP_URL}`)
+    }
+
+    const map = this.make.tilemap({ key: MAP_KEY })
     const tiles = map.addTilesetImage('overworld', 'overworld-tiles')
 
     if (!tiles) {
-      throw new Error('Failed to load tileset for overworld map')
+      throw new Error('[overworld] Failed to resolve tileset image. name=overworld key=overworld-tiles')
     }
 
-    map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
+    const groundLayer = map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    this.npcLayer?.setVisible(false)
-    this.trainerVisionLayer?.setVisible(false)
+
+    groundLayer?.setVisible(true).setDepth(0)
+    this.blockedLayer?.setVisible(true).setDepth(1)
+    this.grassLayer?.setVisible(true).setDepth(2)
+    this.npcLayer?.setVisible(false).setDepth(4)
+    this.trainerVisionLayer?.setVisible(false).setDepth(5)
 
     this.blockedLayer?.setCollision([TILE_WALL])
 
@@ -165,6 +215,7 @@ export class OverworldScene extends Phaser.Scene {
     this.cameras.main.roundPixels = true
     this.updateCameraZoom()
     this.applyOverworldTextScale()
+    this.updateDebugSnapshot(map, [groundLayer, this.blockedLayer, this.grassLayer, this.npcLayer, this.trainerVisionLayer])
     this.scale.on('resize', this.updateCameraZoom, this)
     this.scale.on('resize', this.applyOverworldTextScale, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -177,6 +228,7 @@ export class OverworldScene extends Phaser.Scene {
       this.oakSprite = undefined
       this.oakLabelText = undefined
       this.lastDebugTile = undefined
+      window.__overworldDebug = undefined
     })
 
     this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
@@ -192,6 +244,11 @@ export class OverworldScene extends Phaser.Scene {
 
     const body = this.player.body as Phaser.Physics.Arcade.Body
     body.setVelocity(0)
+
+    this.mapDebug.cameraZoom = this.cameras.main.zoom
+    this.mapDebug.cameraScrollX = this.cameras.main.scrollX
+    this.mapDebug.cameraScrollY = this.cameras.main.scrollY
+    window.__overworldDebug = { ...this.mapDebug }
 
     const virtualInput = useGameStore.getState().virtualInput
 
@@ -450,6 +507,31 @@ export class OverworldScene extends Phaser.Scene {
     return !(npcTile && npcTile.index > 0)
   }
 
+  private updateDebugSnapshot(
+    map: Phaser.Tilemaps.Tilemap,
+    layers: Array<Phaser.Tilemaps.TilemapLayer | undefined>,
+  ) {
+    this.mapDebug = {
+      mapKey: MAP_KEY,
+      mapLoaded: true,
+      widthTiles: map.width,
+      heightTiles: map.height,
+      widthPixels: map.widthInPixels * WORLD_SCALE,
+      heightPixels: map.heightInPixels * WORLD_SCALE,
+      cameraZoom: this.cameras.main.zoom,
+      cameraScrollX: this.cameras.main.scrollX,
+      cameraScrollY: this.cameras.main.scrollY,
+      layers: layers.map((layer, index) => ({
+        name: layer?.layer.name ?? `unknown-${index}`,
+        exists: Boolean(layer),
+        visible: layer?.visible ?? false,
+        depth: layer?.depth ?? 0,
+      })),
+    }
+
+    window.__overworldDebug = { ...this.mapDebug }
+  }
+
   private updateCameraZoom() {
     const targetWidth = 800
     const targetHeight = 480
@@ -457,6 +539,7 @@ export class OverworldScene extends Phaser.Scene {
     const scaleY = this.scale.height / targetHeight
     const zoom = Math.max(1.6, Math.min(2.8, Math.min(scaleX, scaleY) * BASE_CAMERA_ZOOM))
     this.cameras.main.setZoom(zoom)
+    this.mapDebug.cameraZoom = zoom
   }
 
   private applyOverworldTextScale() {

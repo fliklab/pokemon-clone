@@ -17,17 +17,39 @@ type SceneSnapshot = {
   paused: boolean
 }
 
+type LayerDebugSnapshot = {
+  name: string
+  exists: boolean
+  visible: boolean
+  depth: number
+}
+
+type OverworldDebugSnapshot = {
+  mapKey: string
+  mapLoaded: boolean
+  widthTiles: number
+  heightTiles: number
+  widthPixels: number
+  heightPixels: number
+  cameraZoom: number
+  cameraScrollX: number
+  cameraScrollY: number
+  layers: LayerDebugSnapshot[]
+}
+
 type DebugRuntimeSnapshot = {
   renderer: string
   fps: number
   canvasWidth: number
   canvasHeight: number
   scenes: SceneSnapshot[]
+  overworld: OverworldDebugSnapshot | null
 }
 
 declare global {
   interface Window {
     __oakFlowTrace?: Array<Record<string, unknown>>
+    __overworldDebug?: OverworldDebugSnapshot
   }
 }
 
@@ -43,6 +65,7 @@ function App() {
     canvasWidth: 0,
     canvasHeight: 0,
     scenes: [],
+    overworld: null,
   })
   const lastEncounter = useGameStore((state) => state.lastEncounter)
   const battle = useGameStore((state) => state.battle)
@@ -187,6 +210,7 @@ function App() {
         canvasWidth: Math.round(canvas?.width ?? 0),
         canvasHeight: Math.round(canvas?.height ?? 0),
         scenes: collectSceneSnapshot(),
+        overworld: window.__overworldDebug ?? null,
       })
     }
 
@@ -314,6 +338,26 @@ function App() {
               <p>렌더러: {debugRuntime.renderer}</p>
               <p>FPS: {debugRuntime.fps.toFixed(1)}</p>
               <p>캔버스: {debugRuntime.canvasWidth}×{debugRuntime.canvasHeight}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
+              <p className="text-cyan-200 font-semibold">맵 렌더 진단</p>
+              {debugRuntime.overworld ? (
+                <>
+                  <p>맵 키: {debugRuntime.overworld.mapKey} ({debugRuntime.overworld.mapLoaded ? '로드됨' : '미로드'})</p>
+                  <p>맵 크기: {debugRuntime.overworld.widthTiles}×{debugRuntime.overworld.heightTiles} 타일 ({debugRuntime.overworld.widthPixels}×{debugRuntime.overworld.heightPixels}px)</p>
+                  <p>카메라: zoom {debugRuntime.overworld.cameraZoom.toFixed(2)} · scroll {Math.round(debugRuntime.overworld.cameraScrollX)}, {Math.round(debugRuntime.overworld.cameraScrollY)}</p>
+                  <div className="space-y-1">
+                    {debugRuntime.overworld.layers.map((layer) => (
+                      <p key={layer.name}>
+                        {layer.name} · exists:{layer.exists ? 'Y' : 'N'} · visible:{layer.visible ? 'Y' : 'N'} · depth:{layer.depth}
+                      </p>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p>오버월드 맵 진단 데이터 없음</p>
+              )}
             </div>
 
             <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-1">
