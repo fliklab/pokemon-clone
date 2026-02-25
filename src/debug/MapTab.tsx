@@ -33,6 +33,7 @@ export function MapTab() {
   const [showNpc, setShowNpc] = useState(true)
   const [showWireframe, setShowWireframe] = useState(false)
   const [fps, setFps] = useState(0)
+  const [tileAssetReady, setTileAssetReady] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -54,9 +55,35 @@ export function MapTab() {
 
     const image = new Image()
     image.onload = () => {
-      if (active) {
-        setTileImage(image)
+      if (!active) {
+        return
       }
+
+      const hasRenderableSize = image.width > 0 && image.height > 0
+      if (!hasRenderableSize) {
+        console.warn('[debug-map] tileset loaded but image dimensions are invalid. drawImage will be skipped with placeholder.', {
+          src: tilesUrl,
+          width: image.width,
+          height: image.height,
+        })
+        setTileAssetReady(false)
+        setTileImage(null)
+        return
+      }
+
+      setTileAssetReady(true)
+      setTileImage(image)
+    }
+    image.onerror = () => {
+      if (!active) {
+        return
+      }
+
+      console.warn('[debug-map] tileset image preload failed. drawImage will use placeholder tiles.', {
+        src: tilesUrl,
+      })
+      setTileAssetReady(false)
+      setTileImage(null)
     }
     image.src = tilesUrl
 
@@ -91,7 +118,7 @@ export function MapTab() {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !mapData || !tileImage) {
+    if (!canvas || !mapData) {
       return
     }
 
@@ -107,7 +134,8 @@ export function MapTab() {
     context.clearRect(0, 0, canvas.width, canvas.height)
     context.imageSmoothingEnabled = false
 
-    const columns = Math.max(1, Math.floor(tileImage.width / tileSize))
+    const imageReady = Boolean(tileImage && tileImage.width > 0 && tileImage.height > 0)
+    const columns = imageReady ? Math.max(1, Math.floor((tileImage?.width ?? 0) / tileSize)) : 1
 
     tileLayers.forEach((layer) => {
       if (!visible[layer.name]) {
@@ -121,10 +149,31 @@ export function MapTab() {
             continue
           }
 
+          const targetX = x * tileSize
+          const targetY = y * tileSize
+
+          if (!imageReady || !tileImage) {
+            context.fillStyle = '#334155'
+            context.fillRect(targetX, targetY, tileSize, tileSize)
+            context.fillStyle = '#fbbf24'
+            context.fillText('?', targetX + Math.floor(tileSize * 0.35), targetY + Math.floor(tileSize * 0.72))
+            continue
+          }
+
           const spriteIndex = index - 1
           const sx = (spriteIndex % columns) * tileSize
           const sy = Math.floor(spriteIndex / columns) * tileSize
-          context.drawImage(tileImage, sx, sy, tileSize, tileSize, x * tileSize, y * tileSize, tileSize, tileSize)
+          const sourceInBounds = sx + tileSize <= tileImage.width && sy + tileSize <= tileImage.height
+
+          if (!sourceInBounds) {
+            context.fillStyle = '#475569'
+            context.fillRect(targetX, targetY, tileSize, tileSize)
+            context.fillStyle = '#fca5a5'
+            context.fillText('!', targetX + Math.floor(tileSize * 0.35), targetY + Math.floor(tileSize * 0.72))
+            continue
+          }
+
+          context.drawImage(tileImage, sx, sy, tileSize, tileSize, targetX, targetY, tileSize, tileSize)
         }
       }
     })
@@ -230,6 +279,7 @@ export function MapTab() {
         </label>
         <button className="rounded bg-cyan-700 px-3 py-1 text-sm" onClick={exportJson}>Export JSON</button>
         <p className="text-cyan-200">FPS {fps.toFixed(1)}</p>
+        <p className="text-xs text-slate-300">Tileset: {tileAssetReady ? 'ready' : 'placeholder'}</p>
       </div>
 
       <div className="overflow-auto rounded border border-slate-700 bg-slate-950 p-2">
