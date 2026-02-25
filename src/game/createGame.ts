@@ -5,25 +5,11 @@ import { BattleScene } from './scenes/BattleScene'
 const BASE_WIDTH = 800
 const BASE_HEIGHT = 480
 
-class BootScene extends Phaser.Scene {
-  private readonly onReady: () => void
-
-  constructor(onReady: () => void) {
-    super('boot')
-    this.onReady = onReady
-  }
-
-  create() {
-    this.scene.start('overworld')
-    this.onReady()
-  }
-}
-
 export function createGame(parent: string | HTMLElement, onReady: () => void) {
   const overworldScene = new OverworldScene()
   const battleScene = new BattleScene()
 
-  return new Phaser.Game({
+  const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
     width: BASE_WIDTH,
@@ -44,6 +30,10 @@ export function createGame(parent: string | HTMLElement, onReady: () => void) {
         debug: false,
       },
     },
-    scene: [new BootScene(onReady), overworldScene, battleScene],
+    scene: [overworldScene, battleScene],
   })
+
+  game.events.once('ready', onReady)
+
+  return game
 }

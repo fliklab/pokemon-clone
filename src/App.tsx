@@ -375,6 +375,7 @@ function App() {
                 <>
                   <p>맵 키: {debugRuntime.overworld.mapKey} ({debugRuntime.overworld.mapLoaded ? '로드됨' : '미로드'})</p>
                   <p>맵 크기: {debugRuntime.overworld.widthTiles}×{debugRuntime.overworld.heightTiles} 타일 ({debugRuntime.overworld.widthPixels}×{debugRuntime.overworld.heightPixels}px)</p>
+                  <p>레이어 수: {debugRuntime.overworld.layers.length} (표시 {debugRuntime.overworld.layers.filter((layer) => layer.visible).length} / 숨김 {debugRuntime.overworld.layers.filter((layer) => !layer.visible).length})</p>
                   <p>카메라: zoom {debugRuntime.overworld.cameraZoom.toFixed(2)} · scroll {Math.round(debugRuntime.overworld.cameraScrollX)}, {Math.round(debugRuntime.overworld.cameraScrollY)}</p>
                   <p>카메라 bounds: {Math.round(debugRuntime.overworld.cameraBounds.x)}, {Math.round(debugRuntime.overworld.cameraBounds.y)} / {Math.round(debugRuntime.overworld.cameraBounds.width)}×{Math.round(debugRuntime.overworld.cameraBounds.height)}</p>
                   <div className="space-y-1">
