@@ -56,10 +56,13 @@ type DebugRuntimeSnapshot = {
   overworld: OverworldDebugSnapshot | null
 }
 
+type DebugRouteMode = 'map' | 'battle' | null
+
 declare global {
   interface Window {
     __oakFlowTrace?: Array<Record<string, unknown>>
     __overworldDebug?: OverworldDebugSnapshot
+    __debugRouteMode?: DebugRouteMode
   }
 }
 
@@ -94,6 +97,7 @@ function App() {
   const saveGame = useGameStore((state) => state.saveGame)
   const loadGame = useGameStore((state) => state.loadGame)
   const endBattle = useGameStore((state) => state.endBattle)
+  const triggerEncounter = useGameStore((state) => state.triggerEncounter)
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
   const requestNpcInteract = useGameStore((state) => state.requestNpcInteract)
   const sceneReady = useGameStore((state) => state.sceneReady)
@@ -101,6 +105,7 @@ function App() {
   const oakIntroSeen = useGameStore((state) => state.oakIntroSeen)
   const debugMoveRange = useGameStore((state) => state.debugMoveRange)
   const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
+  const debugRouteMode: DebugRouteMode = window.__debugRouteMode ?? null
 
   const focusGameCanvas = useCallback(() => {
     gameCanvasContainerRef.current?.focus()
@@ -231,6 +236,16 @@ function App() {
       window.clearInterval(interval)
     }
   }, [collectSceneSnapshot, getRendererLabel])
+
+  useEffect(() => {
+    if (debugRouteMode !== 'battle' || !sceneReady || battle.active) {
+      return
+    }
+
+    const spawnX = playerTile.x > 0 ? playerTile.x : 3
+    const spawnY = playerTile.y > 0 ? playerTile.y : 2
+    triggerEncounter(spawnX, spawnY)
+  }, [battle.active, debugRouteMode, playerTile.x, playerTile.y, sceneReady, triggerEncounter])
 
   const encounterText = useMemo(() => {
     if (battle.active && !battle.trainerBattle) {
@@ -586,7 +601,7 @@ function App() {
         </div>
       </BaseModal>
 
-      {battle.active && (
+      {debugRouteMode !== 'map' && battle.active && (
         <section className="fixed md:static bottom-3 left-1/2 md:left-auto -translate-x-1/2 md:translate-x-0 z-50 w-[calc(100%-1.5rem)] md:w-full max-w-sm md:max-w-5xl bg-slate-900/95 border border-slate-700 rounded p-4 space-y-3 shadow-2xl">
           <div className="flex justify-between text-sm">
             <p>{battle.player.name} {ko.app.battle.hp}: {battle.player.hp}/{battle.player.maxHp}</p>

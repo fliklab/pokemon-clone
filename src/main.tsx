@@ -2,6 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import DebugAssetsPage from './debug/DebugAssetsPage'
+import DebugMapPage from './debug/DebugMapPage'
+import DebugBattlePage from './debug/DebugBattlePage'
 
 const hideSplash = () => {
   const splash = document.getElementById('app-splash')
@@ -29,9 +32,18 @@ if (document.readyState === 'complete') {
   window.addEventListener('load', hideSplash, { once: true })
 }
 
+const currentPath = window.location.pathname
+const Page = currentPath.endsWith('/debug/assets')
+  ? DebugAssetsPage
+  : currentPath.endsWith('/debug/map')
+    ? DebugMapPage
+    : currentPath.endsWith('/debug/battle')
+      ? DebugBattlePage
+      : App
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Page />
   </StrictMode>,
 )
 

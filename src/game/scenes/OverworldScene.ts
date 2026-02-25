@@ -48,6 +48,7 @@ type OverworldDebugSnapshot = {
 declare global {
   interface Window {
     __overworldDebug?: OverworldDebugSnapshot
+    __debugRouteMode?: 'map' | 'battle' | null
   }
 }
 
@@ -333,6 +334,9 @@ export class OverworldScene extends Phaser.Scene {
       state.requestNpcInteract()
     }
 
+    const debugRouteMode = window.__debugRouteMode ?? null
+    const mapOnlyDebug = debugRouteMode === 'map'
+
     const steppedTrainer = getGymTrainers().find((entry) => {
       const pos = trainerPositions[entry.id]
       return pos?.x === tileX && pos?.y === tileY
@@ -342,11 +346,11 @@ export class OverworldScene extends Phaser.Scene {
     const visionTrainer = visionTrainerId ? getGymTrainers().find((entry) => entry.id === visionTrainerId) : null
     const trainer = steppedTrainer ?? visionTrainer
 
-    if (trainer && !state.defeatedTrainers.includes(trainer.id)) {
+    if (!mapOnlyDebug && trainer && !state.defeatedTrainers.includes(trainer.id)) {
       state.triggerTrainerBattle(trainer)
     }
 
-    if (inGrass && !this.wasInGrass && Math.random() < WILD_ENCOUNTER_CHANCE) {
+    if (!mapOnlyDebug && inGrass && !this.wasInGrass && Math.random() < WILD_ENCOUNTER_CHANCE) {
       state.triggerEncounter(tileX, tileY)
     }
 
