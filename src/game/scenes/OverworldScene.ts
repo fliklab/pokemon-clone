@@ -76,6 +76,8 @@ const MAP_URL = mapJsonUrl
 const TILESET_URL = tilesetImageUrl
 const MAP_FALLBACK_URL = `${BASE_PATH}maps/overworld.json`
 const TILESET_FALLBACK_URL = `${BASE_PATH}maps/overworld-tiles.png`
+const EMPTY_MAP_WIDTH = 20
+const EMPTY_MAP_HEIGHT = 15
 
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -156,6 +158,16 @@ export class OverworldScene extends Phaser.Scene {
       this.load.image(TILESET_KEY, TILESET_URL)
 
       this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        const cachedMap = this.extractTiledJson(this.cache.tilemap.get(MAP_KEY))
+        if (this.mapLoadSucceeded && !this.hasUsableTilemapLayers(cachedMap)) {
+          console.warn('[overworld] map preload completed but tiled JSON is invalid/empty. Empty fallback map will be used.', {
+            mapKey: MAP_KEY,
+            hasLayers: Array.isArray(cachedMap?.layers),
+            layerCount: Array.isArray(cachedMap?.layers) ? cachedMap.layers.length : 0,
+          })
+          this.mapLoadSucceeded = false
+        }
+
         if (!this.mapLoadSucceeded) {
           console.error('[overworld] map preload did not complete successfully', {
             mapKey: MAP_KEY,
@@ -202,12 +214,20 @@ export class OverworldScene extends Phaser.Scene {
         this.createTilesTexture()
       }
 
-      if (!this.cache.tilemap.exists(MAP_KEY)) {
-        this.startFallbackScene(`[overworld] Failed to load tilemap JSON: primary=${MAP_URL} fallback=${MAP_FALLBACK_URL}`)
-        return
+      const cachedMap = this.extractTiledJson(this.cache.tilemap.get(MAP_KEY))
+      const hasValidCachedMap = this.cache.tilemap.exists(MAP_KEY) && this.hasUsableTilemapLayers(cachedMap)
+
+      if (!hasValidCachedMap) {
+        console.warn('[overworld] tilemap data missing or invalid. Falling back to an empty map.', {
+          mapExists: this.cache.tilemap.exists(MAP_KEY),
+          hasLayers: Array.isArray(cachedMap?.layers),
+          layerCount: Array.isArray(cachedMap?.layers) ? cachedMap.layers.length : 0,
+        })
       }
 
-      const map = this.make.tilemap({ key: MAP_KEY })
+      const map = hasValidCachedMap
+        ? this.make.tilemap({ key: MAP_KEY })
+        : this.make.tilemap({ tileWidth: TILE_SIZE, tileHeight: TILE_SIZE, width: EMPTY_MAP_WIDTH, height: EMPTY_MAP_HEIGHT })
       if (!map) {
         this.startFallbackScene('[overworld] make.tilemap returned undefined')
         return
@@ -223,11 +243,21 @@ export class OverworldScene extends Phaser.Scene {
         return
       }
 
-      const groundLayer = map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
-      this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
-      this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
-      this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
-      this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      const ensureLayer = (name: string) => {
+        const existing = map.createLayer(name, tiles, 0, 0)
+        if (existing) {
+          return existing.setScale(WORLD_SCALE)
+        }
+
+        console.warn('[overworld] expected tile layer is missing. Creating blank fallback layer.', { name })
+        return map.createBlankLayer(name, tiles, 0, 0, map.width, map.height)?.setScale(WORLD_SCALE)
+      }
+
+      const groundLayer = ensureLayer('Ground')
+      this.blockedLayer = ensureLayer('Blocked')
+      this.grassLayer = ensureLayer('Grass')
+      this.npcLayer = ensureLayer('NPC')
+      this.trainerVisionLayer = ensureLayer('TrainerVision')
 
       this.applyLayerRenderState(groundLayer, { visible: true, depth: 0, alpha: 1 })
       this.applyLayerRenderState(this.blockedLayer, { visible: true, depth: 1, alpha: 1 })
@@ -368,6 +398,41 @@ export class OverworldScene extends Phaser.Scene {
     }
   }
 
+  private extractTiledJson(cacheEntry: unknown): { layers?: unknown[] } | null {
+    if (!cacheEntry || typeof cacheEntry !== 'object') {
+      return null
+    }
+
+    const maybeWrapped = cacheEntry as { data?: unknown }
+    const rawData = typeof maybeWrapped.data === 'object' && maybeWrapped.data ? maybeWrapped.data : cacheEntry
+
+    if (!rawData || typeof rawData !== 'object') {
+      return null
+    }
+
+    return rawData as { layers?: unknown[] }
+  }
+
+  private hasUsableTilemapLayers(mapData: { layers?: unknown[] } | null): boolean {
+    if (!mapData || !Array.isArray(mapData.layers) || mapData.layers.length === 0) {
+      return false
+    }
+
+    return mapData.layers.some((layer) => {
+      if (!layer || typeof layer !== 'object') {
+        return false
+      }
+
+      const tileLayer = layer as { type?: unknown; data?: unknown; chunks?: unknown }
+      if (tileLayer.type !== 'tilelayer') {
+        return false
+      }
+
+      const dataHasTiles = Array.isArray(tileLayer.data) && tileLayer.data.length > 0
+      const chunksHasTiles = Array.isArray(tileLayer.chunks) && tileLayer.chunks.length > 0
+      return dataHasTiles || chunksHasTiles
+    })
+  }
 
   update() {
     if (!this.player || !this.cursors) {
