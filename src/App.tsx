@@ -108,7 +108,7 @@ function App() {
 
   const collectSceneSnapshot = useCallback((): SceneSnapshot[] => {
     const game = gameRef.current
-    if (!game) {
+    if (!game || !game.scene?.getScenes) {
       return []
     }
 
@@ -216,7 +216,7 @@ function App() {
       const canvas = game.canvas
       setDebugRuntime({
         renderer: getRendererLabel(game.renderer?.type),
-        fps: game.loop.actualFps,
+        fps: game.loop?.actualFps ?? 0,
         canvasWidth: Math.round(canvas?.width ?? 0),
         canvasHeight: Math.round(canvas?.height ?? 0),
         scenes: collectSceneSnapshot(),

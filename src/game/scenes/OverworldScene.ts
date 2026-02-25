@@ -66,7 +66,9 @@ const trainerVisionTiles: Record<string, string> = {
 }
 
 const MAP_KEY = 'overworld-map'
+const TILESET_KEY = 'overworld-tiles'
 const MAP_URL = `${import.meta.env.BASE_URL}maps/overworld.json`
+const TILESET_URL = `${import.meta.env.BASE_URL}maps/overworld-tiles.png`
 
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -106,23 +108,28 @@ export class OverworldScene extends Phaser.Scene {
 
   preload() {
     this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
+    this.load.image(TILESET_KEY, TILESET_URL)
   }
 
   create() {
     this.cameras.main.setBackgroundColor('#1f2937')
-    this.createTilesTexture()
     this.createPlayerFrameTextures()
     this.createOakNpcTexture()
+
+    if (!this.textures.exists(TILESET_KEY)) {
+      this.createTilesTexture()
+    }
 
     if (!this.cache.tilemap.exists(MAP_KEY)) {
       throw new Error(`[overworld] Failed to load tilemap JSON: ${MAP_URL}`)
     }
 
     const map = this.make.tilemap({ key: MAP_KEY })
-    const tiles = map.addTilesetImage('overworld', 'overworld-tiles')
+    const tiles = map.addTilesetImage('overworld', TILESET_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1)
 
     if (!tiles) {
-      throw new Error('[overworld] Failed to resolve tileset image. name=overworld key=overworld-tiles')
+      const knownTextures = this.textures.getTextureKeys().join(',')
+      throw new Error(`[overworld] Failed to resolve tileset image. name=overworld key=${TILESET_KEY} textures=${knownTextures}`)
     }
 
     const groundLayer = map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
@@ -288,8 +295,9 @@ export class OverworldScene extends Phaser.Scene {
     body.velocity.normalize().scale(PLAYER_SPEED)
     this.updatePlayerAnimation(body.velocity.x, body.velocity.y)
 
-    let tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
-    let tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
+    const tileUnit = TILE_SIZE * WORLD_SCALE
+    let tileX = Math.floor(body.center.x / tileUnit)
+    let tileY = Math.floor((body.bottom - 1) / tileUnit)
 
     const warped = this.applyEdgeWarp(tileX, tileY)
     if (warped) {
@@ -596,15 +604,15 @@ export class OverworldScene extends Phaser.Scene {
   }
 
   private createTilesTexture() {
-    if (this.textures.exists('overworld-tiles')) {
+    if (this.textures.exists(TILESET_KEY)) {
       return
     }
 
     const textureWidth = TILE_SIZE * TILE_WALL
     const textureHeight = TILE_SIZE
-    const texture = this.textures.createCanvas('overworld-tiles', textureWidth, textureHeight)
+    const texture = this.textures.createCanvas(TILESET_KEY, textureWidth, textureHeight)
     if (!texture) {
-      throw new Error('[overworld] Failed to create tiles texture canvas: overworld-tiles')
+      throw new Error(`[overworld] Failed to create tiles texture canvas: ${TILESET_KEY}`)
     }
 
     const context = texture.context
