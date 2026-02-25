@@ -600,38 +600,49 @@ export class OverworldScene extends Phaser.Scene {
       return
     }
 
-    const graphics = this.add.graphics({ x: 0, y: 0 })
+    const textureWidth = TILE_SIZE * TILE_WALL
+    const textureHeight = TILE_SIZE
+    const texture = this.textures.createCanvas('overworld-tiles', textureWidth, textureHeight)
+    if (!texture) {
+      throw new Error('[overworld] Failed to create tiles texture canvas: overworld-tiles')
+    }
+
+    const context = texture.context
 
     const groundX = TILE_SIZE * (TILE_GROUND - 1)
     const grassX = TILE_SIZE * (TILE_GRASS - 1)
     const wallX = TILE_SIZE * (TILE_WALL - 1)
 
     // Ground tile (path)
-    graphics.fillStyle(0x667a3e)
-    graphics.fillRect(groundX, 0, TILE_SIZE, TILE_SIZE)
-    graphics.fillStyle(0x748847)
-    graphics.fillRect(groundX, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2)
+    context.fillStyle = '#667a3e'
+    context.fillRect(groundX, 0, TILE_SIZE, TILE_SIZE)
+    context.fillStyle = '#748847'
+    context.fillRect(groundX, TILE_SIZE / 2, TILE_SIZE, TILE_SIZE / 2)
 
     // Grass tile (encounter zone)
-    graphics.fillStyle(0x2d8d43)
-    graphics.fillRect(grassX, 0, TILE_SIZE, TILE_SIZE)
-    graphics.lineStyle(1, 0x165a28)
-    graphics.strokeRect(grassX + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
-    graphics.fillStyle(0x4ec262)
-    graphics.fillRect(grassX + 2, 3, 2, 6)
-    graphics.fillRect(grassX + 7, 5, 2, 7)
-    graphics.fillRect(grassX + 11, 2, 2, 5)
+    context.fillStyle = '#2d8d43'
+    context.fillRect(grassX, 0, TILE_SIZE, TILE_SIZE)
+    context.strokeStyle = '#165a28'
+    context.lineWidth = 1
+    context.strokeRect(grassX + 1.5, 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
+    context.fillStyle = '#4ec262'
+    context.fillRect(grassX + 2, 3, 2, 6)
+    context.fillRect(grassX + 7, 5, 2, 7)
+    context.fillRect(grassX + 11, 2, 2, 5)
 
     // Wall tile (blocked)
-    graphics.fillStyle(0x5b4630)
-    graphics.fillRect(wallX, 0, TILE_SIZE, TILE_SIZE)
-    graphics.lineStyle(1, 0x2f2418)
-    graphics.strokeRect(wallX + 1, 1, TILE_SIZE - 2, TILE_SIZE - 2)
-    graphics.lineBetween(wallX, TILE_SIZE / 2, wallX + TILE_SIZE, TILE_SIZE / 2)
-    graphics.lineBetween(wallX + TILE_SIZE / 2, 0, wallX + TILE_SIZE / 2, TILE_SIZE)
+    context.fillStyle = '#5b4630'
+    context.fillRect(wallX, 0, TILE_SIZE, TILE_SIZE)
+    context.strokeStyle = '#2f2418'
+    context.strokeRect(wallX + 1.5, 1.5, TILE_SIZE - 3, TILE_SIZE - 3)
+    context.beginPath()
+    context.moveTo(wallX, TILE_SIZE / 2)
+    context.lineTo(wallX + TILE_SIZE, TILE_SIZE / 2)
+    context.moveTo(wallX + TILE_SIZE / 2, 0)
+    context.lineTo(wallX + TILE_SIZE / 2, TILE_SIZE)
+    context.stroke()
 
-    graphics.generateTexture('overworld-tiles', TILE_SIZE * TILE_WALL, TILE_SIZE)
-    graphics.destroy()
+    texture.refresh()
   }
 
   private createPlayerFrameTextures() {
