@@ -42,6 +42,8 @@ export class OverworldScene extends Phaser.Scene {
   private shopLabelText?: Phaser.GameObjects.Text
   private pcLabelText?: Phaser.GameObjects.Text
   private wasInGrass = false
+  private lastFacingDirection: 'down' | 'up' | 'left' | 'right' = 'down'
+  private walkFrameCursor = 0
 
   constructor() {
     super('overworld')
@@ -53,7 +55,7 @@ export class OverworldScene extends Phaser.Scene {
 
   create() {
     this.createTilesTexture()
-    this.createPlayerTexture()
+    this.createPlayerFrameTextures()
 
     const map = this.make.tilemap({ key: 'overworld-map' })
     const tiles = map.addTilesetImage('overworld', 'overworld-tiles')
@@ -72,7 +74,11 @@ export class OverworldScene extends Phaser.Scene {
 
     this.blockedLayer?.setCollision([TILE_WALL])
 
-    this.player = this.physics.add.sprite(TILE_SIZE * WORLD_SCALE * 2.5, TILE_SIZE * WORLD_SCALE * 3, 'player')
+    this.player = this.physics.add.sprite(
+      TILE_SIZE * WORLD_SCALE * 2.5,
+      TILE_SIZE * WORLD_SCALE * 3,
+      'player-down-0',
+    )
 
     const shopNpc = this.findNpcTile(1)
     const pcNpc = this.findNpcTile(2)
@@ -164,6 +170,7 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     body.velocity.normalize().scale(PLAYER_SPEED)
+    this.updatePlayerAnimation(body.velocity.x, body.velocity.y)
 
     const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
     const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
@@ -414,17 +421,75 @@ export class OverworldScene extends Phaser.Scene {
     graphics.destroy()
   }
 
-  private createPlayerTexture() {
-    if (this.textures.exists('player')) {
+  private createPlayerFrameTextures() {
+    const drawFrame = (key: string, direction: 'down' | 'up' | 'left' | 'right', walkVariant: 0 | 1) => {
+      if (this.textures.exists(key)) {
+        return
+      }
+
+      const graphics = this.add.graphics({ x: 0, y: 0 })
+      graphics.fillStyle(direction === 'up' ? 0x1e3a8a : 0x1d4ed8)
+      graphics.fillRect(1, 4, 10, 8)
+
+      graphics.fillStyle(0xf8fafc)
+      graphics.fillRect(2, 1, 8, 4)
+
+      graphics.fillStyle(0x111827)
+      if (direction === 'left') {
+        graphics.fillRect(2, 2, 1, 1)
+      } else if (direction === 'right') {
+        graphics.fillRect(8, 2, 1, 1)
+      } else {
+        graphics.fillRect(4, 2, 1, 1)
+        graphics.fillRect(7, 2, 1, 1)
+      }
+
+      graphics.fillStyle(0x0f172a)
+      if (walkVariant === 1) {
+        graphics.fillRect(1, 12, 4, 4)
+        graphics.fillRect(7, 11, 4, 5)
+      } else {
+        graphics.fillRect(2, 12, 3, 4)
+        graphics.fillRect(7, 12, 3, 4)
+      }
+
+      if (direction !== 'up') {
+        graphics.fillStyle(0x93c5fd)
+        if (direction === 'left') {
+          graphics.fillRect(0, 6, 1, 4)
+        } else if (direction === 'right') {
+          graphics.fillRect(10, 6, 1, 4)
+        } else {
+          graphics.fillRect(10, 6, 1, 4)
+        }
+      }
+
+      graphics.generateTexture(key, 12, 16)
+      graphics.destroy()
+    }
+
+    const directions: Array<'down' | 'up' | 'left' | 'right'> = ['down', 'up', 'left', 'right']
+    for (const direction of directions) {
+      drawFrame(`player-${direction}-0`, direction, 0)
+      drawFrame(`player-${direction}-1`, direction, 1)
+    }
+  }
+
+  private updatePlayerAnimation(velocityX: number, velocityY: number) {
+    const threshold = 12
+    if (Math.abs(velocityX) <= threshold && Math.abs(velocityY) <= threshold) {
+      this.player.setTexture(`player-${this.lastFacingDirection}-0`)
       return
     }
 
-    const graphics = this.add.graphics({ x: 0, y: 0 })
-    graphics.fillStyle(0x1d4ed8)
-    graphics.fillRect(0, 0, 12, 16)
-    graphics.fillStyle(0xf8fafc)
-    graphics.fillRect(2, 2, 8, 4)
-    graphics.generateTexture('player', 12, 16)
-    graphics.destroy()
+    if (Math.abs(velocityX) > Math.abs(velocityY)) {
+      this.lastFacingDirection = velocityX > 0 ? 'right' : 'left'
+    } else {
+      this.lastFacingDirection = velocityY > 0 ? 'down' : 'up'
+    }
+
+    this.walkFrameCursor += this.game.loop.delta
+    const stepFrame: 0 | 1 = Math.floor(this.walkFrameCursor / 120) % 2 === 0 ? 0 : 1
+    this.player.setTexture(`player-${this.lastFacingDirection}-${stepFrame}`)
   }
 }

@@ -10,6 +10,7 @@ const TEXT_SCALE_MULTIPLIER = 1.4
 
 type BattleCardUi = {
   container: Phaser.GameObjects.Container
+  glow: Phaser.GameObjects.Rectangle
   frame: Phaser.GameObjects.Rectangle
   nameLabel: Phaser.GameObjects.Text
   levelLabel: Phaser.GameObjects.Text
@@ -40,6 +41,7 @@ export class BattleScene extends Phaser.Scene {
   private phaseCursor = ''
   private currentMessage = ''
   private lastSkillNonce = -1
+  private attackParticleTextureKey = 'battle-attack-particle'
 
   constructor() {
     super('battle')
@@ -47,6 +49,7 @@ export class BattleScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor('#1e293b')
+    this.createAttackParticleTexture()
 
     this.add.rectangle(400, 350, 250, 100, 0x334155)
     this.add.rectangle(650, 130, 180, 80, 0x475569)
@@ -74,6 +77,7 @@ export class BattleScene extends Phaser.Scene {
       wordWrap: { width: 720 },
     })
 
+    this.applyUiFadeIn()
     this.applyBattleTextScale()
     this.scale.on('resize', this.applyBattleTextScale, this)
 
@@ -139,6 +143,7 @@ export class BattleScene extends Phaser.Scene {
 
   private createBattleCard(x: number, y: number, playerSide: boolean): BattleCardUi {
     const container = this.add.container(x, y)
+    const glow = this.add.rectangle(0, 0, 296, 128, playerSide ? 0x22c55e : 0x60a5fa, 0.16).setOrigin(0, 0)
     const frame = this.add.rectangle(0, 0, 286, 118, 0x0f172a, 0.88).setOrigin(0, 0)
     frame.setStrokeStyle(2, playerSide ? 0x22c55e : 0x60a5fa, 0.9)
     const icon = this.add.text(12, 10, playerSide ? '🟢' : '🔵', { fontSize: '16px' })
@@ -169,6 +174,7 @@ export class BattleScene extends Phaser.Scene {
     }).setAlpha(0.15)
 
     container.add([
+      glow,
       frame,
       icon,
       nameLabel,
@@ -187,6 +193,7 @@ export class BattleScene extends Phaser.Scene {
 
     return {
       container,
+      glow,
       frame,
       nameLabel,
       levelLabel,
@@ -235,6 +242,8 @@ export class BattleScene extends Phaser.Scene {
 
     card.hpFill.fillColor = hpRatio > 0.5 ? 0x22c55e : hpRatio > 0.2 ? 0xf59e0b : 0xef4444
     card.frame.setStrokeStyle(2, model.level >= 8 ? 0xfacc15 : model.isTrainer ? 0x93c5fd : 0x22c55e, 0.95)
+    card.glow.fillColor = model.isTurn ? 0x38bdf8 : hpRatio <= 0.25 ? 0xef4444 : 0x22c55e
+    card.glow.setAlpha(model.isTurn ? 0.32 : hpRatio <= 0.25 ? 0.22 : 0.12)
 
     const statusUi = this.resolveStatusUi(model.status)
     card.statusChip.setText(statusUi.label)
@@ -255,6 +264,15 @@ export class BattleScene extends Phaser.Scene {
         duration: 700,
         yoyo: true,
         repeat: 0,
+      })
+    }
+
+    if (model.isTurn) {
+      this.tweens.add({
+        targets: card.glow,
+        alpha: { from: card.glow.alpha, to: Math.min(0.45, card.glow.alpha + 0.1) },
+        duration: 160,
+        yoyo: true,
       })
     }
   }
@@ -311,6 +329,69 @@ export class BattleScene extends Phaser.Scene {
     this.enemyCard?.hpText.setFontSize(cardFont)
     this.playerCard?.expText.setFontSize(cardFont)
     this.enemyCard?.expText.setFontSize(cardFont)
+  }
+
+  private applyUiFadeIn() {
+    const uiTargets = [
+      this.titleText,
+      this.messageText,
+      this.playerCard?.container,
+      this.enemyCard?.container,
+      this.partyContainer,
+      this.playerSprite,
+      this.enemySprite,
+    ].filter(Boolean)
+
+    uiTargets.forEach((target, index) => {
+      const gameObject = target as Phaser.GameObjects.GameObject & { setAlpha: (value: number) => unknown }
+      gameObject.setAlpha(0)
+      this.tweens.add({
+        targets: gameObject,
+        alpha: 1,
+        duration: 220,
+        delay: index * 35,
+        ease: 'Quad.easeOut',
+      })
+    })
+  }
+
+  private createAttackParticleTexture() {
+    if (this.textures.exists(this.attackParticleTextureKey)) {
+      return
+    }
+
+    const graphics = this.add.graphics({ x: 0, y: 0 })
+    graphics.fillStyle(0xffffff)
+    graphics.fillCircle(4, 4, 4)
+    graphics.generateTexture(this.attackParticleTextureKey, 8, 8)
+    graphics.destroy()
+  }
+
+  private emitAttackParticles(from: Phaser.GameObjects.Text | undefined, to: Phaser.GameObjects.Text | undefined, hue: number) {
+    if (!from || !to) {
+      return
+    }
+
+    const emitter = this.add.particles(from.x, from.y, this.attackParticleTextureKey, {
+      speed: { min: 50, max: 140 },
+      lifespan: 260,
+      scale: { start: 0.8, end: 0 },
+      quantity: 8,
+      tint: [hue, 0xffffff],
+      blendMode: 'ADD',
+      emitting: false,
+    })
+
+    emitter.explode(14, from.x, from.y)
+    emitter.explode(10, to.x, to.y)
+
+    this.tweens.add({
+      targets: emitter,
+      x: to.x,
+      y: to.y,
+      duration: 180,
+      onComplete: () => emitter.destroy(),
+    })
   }
 
   private updateTypewriter(nextMessage: string) {
@@ -374,8 +455,14 @@ export class BattleScene extends Phaser.Scene {
 
     if (phase === 'lost') {
       this.playTone(120)
-      this.cameras.main.shake(220, 0.007)
+      this.triggerScreenShake('heavy')
     }
+  }
+
+  private triggerScreenShake(power: 'light' | 'medium' | 'heavy') {
+    const intensity = power === 'heavy' ? 0.012 : power === 'medium' ? 0.007 : 0.003
+    const duration = power === 'heavy' ? 220 : power === 'medium' ? 150 : 90
+    this.cameras.main.shake(duration, intensity)
   }
 
   private applySkillCastFx(skillCast: { by: 'player' | 'enemy'; skillId: string; nonce: number } | null) {
@@ -385,22 +472,32 @@ export class BattleScene extends Phaser.Scene {
 
     this.lastSkillNonce = skillCast.nonce
     const skill = getSkillById(skillCast.skillId)
+    const attackerSprite = skillCast.by === 'player' ? this.playerSprite : this.enemySprite
     const targetSprite = skillCast.by === 'player' ? this.enemySprite : this.playerSprite
 
     if (skill.animation === 'wave') {
+      this.emitAttackParticles(attackerSprite, targetSprite, 0x38bdf8)
       this.tweens.add({ targets: targetSprite, y: '-=10', yoyo: true, duration: 90, repeat: 1 })
       this.cameras.main.flash(100, 120, 180, 255)
+      this.triggerScreenShake('light')
     } else if (skill.animation === 'burst') {
+      this.emitAttackParticles(attackerSprite, targetSprite, 0xf97316)
       this.tweens.add({ targets: targetSprite, scale: 1.15, yoyo: true, duration: 120 })
       this.cameras.main.flash(100, 255, 160, 120)
+      this.triggerScreenShake('medium')
     } else if (skill.animation === 'spark') {
+      this.emitAttackParticles(attackerSprite, targetSprite, 0xfef08a)
       this.tweens.add({ targets: targetSprite, angle: 12, yoyo: true, duration: 60, repeat: 2 })
       this.cameras.main.flash(80, 255, 255, 130)
+      this.triggerScreenShake('light')
     } else if (skill.animation === 'whip') {
+      this.emitAttackParticles(attackerSprite, targetSprite, 0xa78bfa)
       this.tweens.add({ targets: targetSprite, x: '+=8', yoyo: true, duration: 70, repeat: 2 })
-      this.cameras.main.shake(120, 0.002)
+      this.triggerScreenShake('medium')
     } else {
+      this.emitAttackParticles(attackerSprite, targetSprite, 0xffffff)
       this.tweens.add({ targets: targetSprite, x: '+=16', yoyo: true, duration: 80 })
+      this.triggerScreenShake('light')
     }
 
     this.playSkillTone(skill.sfx)
