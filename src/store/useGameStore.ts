@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { applyDamage, applyEndTurnStatus, calculateDamage } from '../battle/damage'
 import { calculateCatchChance, rollCatch } from '../battle/capture'
 import { chooseSkill, getSkillById, resolveSkillSlots } from '../battle/skills'
-import type { BattleCommand, BattleSnapshot, Battler, ItemId } from '../battle/types'
+import type { BattleCommand, BattleSnapshot, BattleUiMenu, Battler, ItemId } from '../battle/types'
 import { createStarterMonster, createWildEnemy, expForNextLevel, grantBattleExp, type PartyMonster } from '../progression/leveling'
 import { ko } from '../i18n/ko'
 
@@ -61,6 +61,8 @@ type GameState = {
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
   chooseBattleCommand: (command: BattleCommand, skillId?: string) => void
+  setBattleUiMenu: (menu: BattleUiMenu) => void
+  toggleBattleUiMenu: (menu: Exclude<BattleUiMenu, null>) => void
   switchBattleMonster: (monsterId: string) => void
   setVirtualInput: (direction: keyof DirectionalInput, active: boolean) => void
   setNearbyNpc: (target: NearbyNpc) => void
@@ -116,6 +118,7 @@ const initialParty = [createStarterMonster()]
 const initialBattleState = (party: PartyMonster[]): GameState['battle'] => ({
   active: false,
   phase: 'idle',
+  uiMenu: null,
   player: party[0],
   enemy: createWildEnemy(party[0].level, 0),
   message: ko.store.walkHint,
@@ -407,6 +410,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           potions: nextBag.potion,
           battle: {
             ...battle,
+          uiMenu: null,
             player: playerAfter,
             phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
             message: `${ko.store.antidoteUsed(battle.player.name)} ${battle.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
@@ -428,6 +432,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         potions: nextBag.potion,
         battle: {
           ...battle,
+          uiMenu: null,
           player: playerAfter,
           phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
           message: `${ko.store.bagItemUsed(itemId, battle.player.name)} ${battle.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,
@@ -501,6 +506,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       battle: {
         active: true,
         phase: 'player_turn',
+        uiMenu: null,
         player: { ...leadMonster },
         enemy,
         message: ko.store.wildAppeared(enemy.name),
@@ -522,6 +528,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       battle: {
         active: true,
         phase: 'player_turn',
+        uiMenu: null,
         player: { ...leadMonster },
         enemy: trainer.enemy,
         message: ko.store.trainerChallenge(trainer.name, trainer.badgeReward),
@@ -532,6 +539,30 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     })
   },
+  setBattleUiMenu: (menu) => set((state) => {
+    if (!state.battle.active || state.battle.phase !== 'player_turn') {
+      return state
+    }
+
+    return {
+      battle: {
+        ...state.battle,
+        uiMenu: menu,
+      },
+    }
+  }),
+  toggleBattleUiMenu: (menu) => set((state) => {
+    if (!state.battle.active || state.battle.phase !== 'player_turn') {
+      return state
+    }
+
+    return {
+      battle: {
+        ...state.battle,
+        uiMenu: state.battle.uiMenu === menu ? null : menu,
+      },
+    }
+  }),
   chooseBattleCommand: (command, skillId) => {
     const { battle } = get()
     if (!battle.active || battle.phase !== 'player_turn') {
@@ -543,6 +574,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
+          uiMenu: null,
             message: ko.store.trainerNoRun,
           },
         })
@@ -554,6 +586,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
+          uiMenu: null,
             phase: 'escaped',
             message: ko.store.escaped,
           },
@@ -564,6 +597,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         battle: {
           ...battle,
+          uiMenu: null,
           phase: 'enemy_turn',
           message: ko.store.failedEscape,
         },
@@ -575,6 +609,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
+          uiMenu: null,
             message: ko.store.cannotCatchTrainerMonster,
           },
         })
@@ -585,6 +620,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
+          uiMenu: null,
             message: ko.store.partyFull,
           },
         })
@@ -598,6 +634,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set((state) => ({
           battle: {
             ...battle,
+          uiMenu: null,
             phase: 'caught',
             message: ko.store.caught(battle.enemy.name),
           },
@@ -609,6 +646,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         battle: {
           ...battle,
+          uiMenu: null,
           phase: 'enemy_turn',
           message: ko.store.brokeFree(battle.enemy.name),
         },
@@ -622,6 +660,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           battle: {
             ...battle,
+          uiMenu: null,
             message: ko.store.noBagItem,
           },
         })
@@ -699,6 +738,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         battle: {
           ...battle,
+          uiMenu: null,
           phase,
           player,
           enemy,
@@ -723,6 +763,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       set({
         battle: {
           ...updated,
+          uiMenu: null,
           player: playerAfter,
           phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
           message: `${updated.message} ${updated.enemy.name} ${enemySkill.name}! ${retaliation} 데미지!`,

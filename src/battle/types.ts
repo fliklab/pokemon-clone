@@ -1,5 +1,7 @@
 export type BattleCommand = 'fight' | 'item' | 'catch' | 'run'
 
+export type BattleUiMenu = BattleCommand | null
+
 export type ItemId = 'potion' | 'superPotion' | 'antidote'
 
 export type BattleStatus = 'idle' | 'player_turn' | 'enemy_turn' | 'resolved' | 'escaped' | 'caught' | 'lost'
@@ -30,6 +32,7 @@ export type SkillCast = {
 
 export type BattleSnapshot = {
   phase: BattleStatus
+  uiMenu: BattleUiMenu
   player: Battler
   enemy: Battler
   message: string

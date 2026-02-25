@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { getSkillById } from '../../battle/skills'
+import type { BattleUiMenu } from '../../battle/types'
 import { ko } from '../../i18n/ko'
 import { useGameStore } from '../../store/useGameStore'
 
@@ -35,6 +36,7 @@ export class BattleScene extends Phaser.Scene {
   private enemySprite?: Phaser.GameObjects.Text
   private titleText?: Phaser.GameObjects.Text
   private messageText?: Phaser.GameObjects.Text
+  private uiMenuText?: Phaser.GameObjects.Text
   private playerCard?: BattleCardUi
   private enemyCard?: BattleCardUi
   private partyContainer?: Phaser.GameObjects.Container
@@ -77,6 +79,10 @@ export class BattleScene extends Phaser.Scene {
       fontSize: '16px',
       wordWrap: { width: 720 },
     })
+    this.uiMenuText = this.add.text(520, 390, '선택: 없음', {
+      color: '#cbd5e1',
+      fontSize: '12px',
+    }).setDepth(8)
 
     this.applyUiFadeIn()
     this.applyBattleTextScale()
@@ -119,6 +125,7 @@ export class BattleScene extends Phaser.Scene {
       this.applyMinorPolishes(battle.phase)
       this.applyPlaceholders(battle.phase)
       this.applySkillCastFx(battle.lastSkillCast)
+      this.syncBattleUiMenu(battle.uiMenu)
 
       const ended = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
       if (ended && !this.endTimer) {
@@ -326,6 +333,7 @@ export class BattleScene extends Phaser.Scene {
     const tileWidth = this.getTileWidth()
     this.titleText?.setFontSize(Math.round(tileWidth * 0.6 * TEXT_SCALE_MULTIPLIER))
     this.messageText?.setFontSize(Math.round(tileWidth * 0.55 * TEXT_SCALE_MULTIPLIER))
+    this.uiMenuText?.setFontSize(Math.round(tileWidth * 0.42 * TEXT_SCALE_MULTIPLIER))
 
     const cardFont = Math.max(Math.round(11 * TEXT_SCALE_MULTIPLIER), Math.round(tileWidth * 0.42 * TEXT_SCALE_MULTIPLIER))
     this.playerCard?.nameLabel.setFontSize(cardFont + 2)
@@ -345,6 +353,7 @@ export class BattleScene extends Phaser.Scene {
       this.partyContainer,
       this.playerSprite,
       this.enemySprite,
+      this.uiMenuText,
     ].filter(Boolean)
 
     uiTargets.forEach((target, index) => {
@@ -428,6 +437,25 @@ export class BattleScene extends Phaser.Scene {
       },
       callbackScope: this,
     })
+  }
+
+  private syncBattleUiMenu(menu: BattleUiMenu) {
+    if (!this.uiMenuText) {
+      return
+    }
+
+    const menuLabel = menu === 'fight'
+      ? '공격'
+      : menu === 'item'
+        ? '아이템'
+        : menu === 'catch'
+          ? '포획'
+          : menu === 'run'
+            ? '도망'
+            : '없음'
+
+    this.uiMenuText.setText(`선택: ${menuLabel}`)
+    this.uiMenuText.setColor(menu ? '#facc15' : '#cbd5e1')
   }
 
   private applyPlaceholders(phase: string) {
@@ -584,6 +612,7 @@ export class BattleScene extends Phaser.Scene {
     this.typingTimer = undefined
     this.titleText = undefined
     this.messageText = undefined
+    this.uiMenuText = undefined
     this.playerCard = undefined
     this.enemyCard = undefined
     this.partyContainer = undefined

@@ -10,6 +10,7 @@ function resetStore() {
     battle: {
       active: false,
       phase: 'idle',
+      uiMenu: null,
       player: useGameStore.getState().party[0],
       enemy: {
         name: 'Wildling',
