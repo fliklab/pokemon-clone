@@ -320,7 +320,7 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const blockedTile = this.blockedLayer.getTileAt(tileX, tileY)
-    if (blockedTile?.index === TILE_WALL) {
+    if (blockedTile && blockedTile.index !== -1 && blockedTile.index !== TILE_GROUND && blockedTile.index !== TILE_GRASS) {
       return false
     }
 
