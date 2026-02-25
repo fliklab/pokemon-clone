@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { OverworldScene } from './scenes/OverworldScene'
 import { BattleScene } from './scenes/BattleScene'
+import { FallbackDummyScene } from './scenes/FallbackDummyScene'
 import type { GameErrorPayload } from './ErrorOverlay'
 
 const BASE_WIDTH = 800
@@ -38,6 +39,21 @@ function toPayload(
   }
 }
 
+function tryStartFallbackScene(scene: SceneWithLifecycle, error: unknown) {
+  if (scene.scene?.key === 'fallback-dummy') {
+    return
+  }
+
+  try {
+    scene.scene.start('fallback-dummy', {
+      failedScene: scene.scene?.key,
+      reason: error instanceof Error ? error.message : String(error),
+    })
+  } catch {
+    // no-op: fallback startup should never throw to caller
+  }
+}
+
 function wrapSceneLifecycle(
   scene: SceneWithLifecycle,
   method: SceneLifecycle,
@@ -62,6 +78,10 @@ function wrapSceneLifecycle(
       if (result instanceof Promise) {
         return result.catch((error) => {
           onError(toPayload(`scene-${method}` as GameErrorPayload['source'], error, this.scene.key))
+          if (method === 'create') {
+            tryStartFallbackScene(this, error)
+            return undefined
+          }
           throw error
         })
       }
@@ -69,6 +89,10 @@ function wrapSceneLifecycle(
       return result
     } catch (error) {
       onError(toPayload(`scene-${method}` as GameErrorPayload['source'], error, this.scene.key))
+      if (method === 'create') {
+        tryStartFallbackScene(this, error)
+        return
+      }
       throw error
     }
   }
@@ -81,8 +105,9 @@ export function createGame(
 ) {
   const overworldScene = ensureSceneObject(new OverworldScene() as SceneWithLifecycle, 'OverworldScene')
   const battleScene = ensureSceneObject(new BattleScene() as SceneWithLifecycle, 'BattleScene')
+  const fallbackScene = ensureSceneObject(new FallbackDummyScene() as SceneWithLifecycle, 'FallbackDummyScene')
 
-  ;([overworldScene, battleScene] as SceneWithLifecycle[]).forEach((scene) => {
+  ;([overworldScene, battleScene, fallbackScene] as SceneWithLifecycle[]).forEach((scene) => {
     wrapSceneLifecycle(scene, 'init', onError)
     wrapSceneLifecycle(scene, 'preload', onError)
     wrapSceneLifecycle(scene, 'create', onError)
@@ -110,7 +135,7 @@ export function createGame(
           debug: false,
         },
       },
-      scene: [overworldScene, battleScene],
+      scene: [overworldScene, battleScene, fallbackScene],
     })
 
     game.events.once('ready', onReady)

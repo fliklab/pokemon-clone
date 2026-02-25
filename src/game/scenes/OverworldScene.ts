@@ -95,6 +95,8 @@ export class OverworldScene extends Phaser.Scene {
   private lastFacingDirection: 'down' | 'up' | 'left' | 'right' = 'down'
   private walkFrameCursor = 0
   private warpCooldownUntil = 0
+  private mapLoadSucceeded = false
+  private tilesetLoadSucceeded = false
   private mapDebug: OverworldDebugSnapshot = {
     mapKey: MAP_KEY,
     mapLoaded: false,
@@ -115,6 +117,19 @@ export class OverworldScene extends Phaser.Scene {
 
   preload() {
     try {
+      this.mapLoadSucceeded = false
+      this.tilesetLoadSucceeded = false
+
+      this.load.on(Phaser.Loader.Events.FILE_COMPLETE, (key: string, type: string) => {
+        if (key === MAP_KEY && type === 'tilemapJSON') {
+          this.mapLoadSucceeded = true
+        }
+
+        if (key === TILESET_KEY && type === 'image') {
+          this.tilesetLoadSucceeded = true
+        }
+      })
+
       this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
         if (file.key === TILESET_KEY) {
           console.warn('[overworld] tileset image failed to load. Runtime fallback texture will be used.', {
@@ -139,6 +154,24 @@ export class OverworldScene extends Phaser.Scene {
 
       this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
       this.load.image(TILESET_KEY, TILESET_URL)
+
+      this.load.once(Phaser.Loader.Events.COMPLETE, () => {
+        if (!this.mapLoadSucceeded) {
+          console.error('[overworld] map preload did not complete successfully', {
+            mapKey: MAP_KEY,
+            primaryUrl: MAP_URL,
+            fallbackUrl: MAP_FALLBACK_URL,
+          })
+        }
+
+        if (!this.tilesetLoadSucceeded) {
+          console.warn('[overworld] tileset preload did not complete. Runtime fallback texture will be used.', {
+            tilesetKey: TILESET_KEY,
+            primaryUrl: TILESET_URL,
+            fallbackUrl: TILESET_FALLBACK_URL,
+          })
+        }
+      })
     } catch (error) {
       console.error('[overworld] preload failed', {
         error,
@@ -151,145 +184,163 @@ export class OverworldScene extends Phaser.Scene {
 
   create() {
     try {
+      if (!this.scene || !this.scene.manager) {
+        console.error('[overworld] create aborted: scene manager is unavailable')
+        return
+      }
+
+      if (!this.make || !this.cache?.tilemap || !this.cameras?.main || !this.physics) {
+        this.startFallbackScene('[overworld] create prerequisites are unavailable')
+        return
+      }
+
       this.cameras.main.setBackgroundColor('#1f2937')
       this.createPlayerFrameTextures()
       this.createOakNpcTexture()
 
-    if (!this.textures.exists(TILESET_KEY)) {
-      this.createTilesTexture()
-    }
+      if (!this.textures.exists(TILESET_KEY)) {
+        this.createTilesTexture()
+      }
 
-    if (!this.cache.tilemap.exists(MAP_KEY)) {
-      throw new Error(`[overworld] Failed to load tilemap JSON: primary=${MAP_URL} fallback=${MAP_FALLBACK_URL}`)
-    }
+      if (!this.cache.tilemap.exists(MAP_KEY)) {
+        this.startFallbackScene(`[overworld] Failed to load tilemap JSON: primary=${MAP_URL} fallback=${MAP_FALLBACK_URL}`)
+        return
+      }
 
-    const map = this.make.tilemap({ key: MAP_KEY })
-    const tiles = map.addTilesetImage('overworld', TILESET_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1)
+      const map = this.make.tilemap({ key: MAP_KEY })
+      if (!map) {
+        this.startFallbackScene('[overworld] make.tilemap returned undefined')
+        return
+      }
 
-    if (!tiles) {
-      const knownTextures = this.textures.getTextureKeys().join(',')
-      throw new Error(`[overworld] Failed to resolve tileset image. name=overworld key=${TILESET_KEY} textures=${knownTextures}`)
-    }
+      const tiles = map.addTilesetImage('overworld', TILESET_KEY, TILE_SIZE, TILE_SIZE, 0, 0, 1)
 
-    const groundLayer = map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
-    this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      if (!tiles) {
+        const knownTextures = this.textures.getTextureKeys().join(',')
+        this.startFallbackScene(
+          `[overworld] Failed to resolve tileset image. name=overworld key=${TILESET_KEY} textures=${knownTextures}`,
+        )
+        return
+      }
 
-    this.applyLayerRenderState(groundLayer, { visible: true, depth: 0, alpha: 1 })
-    this.applyLayerRenderState(this.blockedLayer, { visible: true, depth: 1, alpha: 1 })
-    this.applyLayerRenderState(this.grassLayer, { visible: true, depth: 2, alpha: 1 })
-    this.applyLayerRenderState(this.npcLayer, { visible: false, depth: 4, alpha: 1 })
-    this.applyLayerRenderState(this.trainerVisionLayer, { visible: false, depth: 5, alpha: 0.35 })
+      const groundLayer = map.createLayer('Ground', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      this.blockedLayer = map.createLayer('Blocked', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      this.grassLayer = map.createLayer('Grass', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
+      this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
 
-    this.blockedLayer?.setCollision([TILE_WALL])
+      this.applyLayerRenderState(groundLayer, { visible: true, depth: 0, alpha: 1 })
+      this.applyLayerRenderState(this.blockedLayer, { visible: true, depth: 1, alpha: 1 })
+      this.applyLayerRenderState(this.grassLayer, { visible: true, depth: 2, alpha: 1 })
+      this.applyLayerRenderState(this.npcLayer, { visible: false, depth: 4, alpha: 1 })
+      this.applyLayerRenderState(this.trainerVisionLayer, { visible: false, depth: 5, alpha: 0.35 })
 
-    const currentTile = useGameStore.getState().playerTile
-    const startTile = currentTile.x > 0 || currentTile.y > 0 ? currentTile : { x: 3, y: 2 }
+      this.blockedLayer?.setCollision([TILE_WALL])
 
-    this.player = this.physics.add.sprite(
-      (startTile.x + 0.5) * TILE_SIZE * WORLD_SCALE,
-      (startTile.y + 1) * TILE_SIZE * WORLD_SCALE,
-      'player-down-0',
-    )
+      const currentTile = useGameStore.getState().playerTile
+      const startTile = currentTile.x > 0 || currentTile.y > 0 ? currentTile : { x: 3, y: 2 }
 
-    const shopNpc = this.findNpcTile(1)
-    const pcNpc = this.findNpcTile(2)
-    const oakNpc = this.findNpcTile(4)
-
-    if (shopNpc) {
-      this.shopLabelText = this.add.text(
-        (shopNpc.x - 0.1) * TILE_SIZE * WORLD_SCALE,
-        (shopNpc.y - 0.2) * TILE_SIZE * WORLD_SCALE,
-        ko.overworld.shopLabel,
-        {
-          color: '#fbbf24',
-          fontSize: '10px',
-          align: 'center',
-          backgroundColor: '#00000088',
-          padding: { x: 2, y: 1 },
-        },
+      this.player = this.physics.add.sprite(
+        (startTile.x + 0.5) * TILE_SIZE * WORLD_SCALE,
+        (startTile.y + 1) * TILE_SIZE * WORLD_SCALE,
+        'player-down-0',
       )
-    }
 
-    if (pcNpc) {
-      this.pcLabelText = this.add.text(
-        (pcNpc.x + 0.05) * TILE_SIZE * WORLD_SCALE,
-        (pcNpc.y + 0.6) * TILE_SIZE * WORLD_SCALE,
-        ko.overworld.pcLabel,
-        {
-          color: '#38bdf8',
-          fontSize: '10px',
-          align: 'center',
-          backgroundColor: '#00000088',
-          padding: { x: 2, y: 1 },
-        },
-      )
-    }
+      const shopNpc = this.findNpcTile(1)
+      const pcNpc = this.findNpcTile(2)
+      const oakNpc = this.findNpcTile(4)
 
+      if (shopNpc) {
+        this.shopLabelText = this.add.text(
+          (shopNpc.x - 0.1) * TILE_SIZE * WORLD_SCALE,
+          (shopNpc.y - 0.2) * TILE_SIZE * WORLD_SCALE,
+          ko.overworld.shopLabel,
+          {
+            color: '#fbbf24',
+            fontSize: '10px',
+            align: 'center',
+            backgroundColor: '#00000088',
+            padding: { x: 2, y: 1 },
+          },
+        )
+      }
 
-    if (oakNpc) {
-      this.oakSprite = this.add.image(
-        (oakNpc.x + 0.5) * TILE_SIZE * WORLD_SCALE,
-        (oakNpc.y + 1) * TILE_SIZE * WORLD_SCALE,
-        'npc-oak',
-      )
-      this.oakSprite.setOrigin(0.5, 1)
-      this.oakSprite.setScale(WORLD_SCALE)
-      this.oakSprite.setDepth(11)
+      if (pcNpc) {
+        this.pcLabelText = this.add.text(
+          (pcNpc.x + 0.05) * TILE_SIZE * WORLD_SCALE,
+          (pcNpc.y + 0.6) * TILE_SIZE * WORLD_SCALE,
+          ko.overworld.pcLabel,
+          {
+            color: '#38bdf8',
+            fontSize: '10px',
+            align: 'center',
+            backgroundColor: '#00000088',
+            padding: { x: 2, y: 1 },
+          },
+        )
+      }
 
-      this.oakLabelText = this.add.text(
-        (oakNpc.x - 0.2) * TILE_SIZE * WORLD_SCALE,
-        (oakNpc.y - 0.45) * TILE_SIZE * WORLD_SCALE,
-        ko.overworld.oakLabel,
-        {
-          color: '#f8fafc',
-          fontSize: '10px',
-          align: 'center',
-          backgroundColor: '#00000088',
-          padding: { x: 2, y: 1 },
-        },
-      )
-      this.oakLabelText.setDepth(20)
-    }
+      if (oakNpc) {
+        this.oakSprite = this.add.image(
+          (oakNpc.x + 0.5) * TILE_SIZE * WORLD_SCALE,
+          (oakNpc.y + 1) * TILE_SIZE * WORLD_SCALE,
+          'npc-oak',
+        )
+        this.oakSprite.setOrigin(0.5, 1)
+        this.oakSprite.setScale(WORLD_SCALE)
+        this.oakSprite.setDepth(11)
 
-    this.player.setOrigin(0.5, 1)
-    this.player.setScale(WORLD_SCALE)
-    this.player.setDepth(10)
-    this.player.setCollideWorldBounds(true)
+        this.oakLabelText = this.add.text(
+          (oakNpc.x - 0.2) * TILE_SIZE * WORLD_SCALE,
+          (oakNpc.y - 0.45) * TILE_SIZE * WORLD_SCALE,
+          ko.overworld.oakLabel,
+          {
+            color: '#f8fafc',
+            fontSize: '10px',
+            align: 'center',
+            backgroundColor: '#00000088',
+            padding: { x: 2, y: 1 },
+          },
+        )
+        this.oakLabelText.setDepth(20)
+      }
 
-    this.debugMoveGraphics = this.add.graphics()
-    this.debugMoveGraphics.setDepth(30)
+      this.player.setOrigin(0.5, 1)
+      this.player.setScale(WORLD_SCALE)
+      this.player.setDepth(10)
+      this.player.setCollideWorldBounds(true)
 
-    if (this.blockedLayer) {
-      this.physics.add.collider(this.player, this.blockedLayer)
-    }
+      this.debugMoveGraphics = this.add.graphics()
+      this.debugMoveGraphics.setDepth(30)
 
-    const worldWidth = map.widthInPixels * WORLD_SCALE
-    const worldHeight = map.heightInPixels * WORLD_SCALE
-    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight)
-    this.cameras.main.setScroll(0, 0)
-    this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
-    this.cameras.main.startFollow(this.player, true, 0.2, 0.2)
-    this.cameras.main.roundPixels = true
-    this.updateCameraZoom()
-    this.applyOverworldTextScale()
-    this.updateDebugSnapshot(map, [groundLayer, this.blockedLayer, this.grassLayer, this.npcLayer, this.trainerVisionLayer])
-    this.scale.on('resize', this.updateCameraZoom, this)
-    this.scale.on('resize', this.applyOverworldTextScale, this)
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.scale.off('resize', this.updateCameraZoom, this)
-      this.scale.off('resize', this.applyOverworldTextScale, this)
-      this.debugMoveGraphics?.destroy()
-      this.oakSprite?.destroy()
-      this.oakLabelText?.destroy()
-      this.debugMoveGraphics = undefined
-      this.oakSprite = undefined
-      this.oakLabelText = undefined
-      this.lastDebugTile = undefined
-      window.__overworldDebug = undefined
-    })
+      if (this.blockedLayer) {
+        this.physics.add.collider(this.player, this.blockedLayer)
+      }
+
+      const worldWidth = map.widthInPixels * WORLD_SCALE
+      const worldHeight = map.heightInPixels * WORLD_SCALE
+      this.cameras.main.setBounds(0, 0, worldWidth, worldHeight)
+      this.cameras.main.setScroll(0, 0)
+      this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
+      this.cameras.main.startFollow(this.player, true, 0.2, 0.2)
+      this.cameras.main.roundPixels = true
+      this.updateCameraZoom()
+      this.applyOverworldTextScale()
+      this.updateDebugSnapshot(map, [groundLayer, this.blockedLayer, this.grassLayer, this.npcLayer, this.trainerVisionLayer])
+      this.scale.on('resize', this.updateCameraZoom, this)
+      this.scale.on('resize', this.applyOverworldTextScale, this)
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.scale.off('resize', this.updateCameraZoom, this)
+        this.scale.off('resize', this.applyOverworldTextScale, this)
+        this.debugMoveGraphics?.destroy()
+        this.oakSprite?.destroy()
+        this.oakLabelText?.destroy()
+        this.debugMoveGraphics = undefined
+        this.oakSprite = undefined
+        this.oakLabelText = undefined
+        this.lastDebugTile = undefined
+        window.__overworldDebug = undefined
+      })
 
       this.cursors = this.input.keyboard?.createCursorKeys() ?? ({} as Phaser.Types.Input.Keyboard.CursorKeys)
       this.interactKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A)
@@ -301,9 +352,22 @@ export class OverworldScene extends Phaser.Scene {
         mapKey: MAP_KEY,
         tilesetKey: TILESET_KEY,
       })
-      throw error
+      this.startFallbackScene(error instanceof Error ? error.message : String(error))
     }
   }
+
+  private startFallbackScene(reason: string) {
+    console.error('[overworld] switching to fallback scene', { reason })
+    useGameStore.getState().setSceneReady(false)
+
+    if (this.scene && this.scene.key !== 'fallback-dummy') {
+      this.scene.start('fallback-dummy', {
+        failedScene: this.scene.key,
+        reason,
+      })
+    }
+  }
+
 
   update() {
     if (!this.player || !this.cursors) {
