@@ -4,6 +4,7 @@ import type Phaser from 'phaser'
 import { resolveSkillSlots } from './battle/skills'
 import type { ItemId } from './battle/types'
 import { createGame } from './game/createGame'
+import { ErrorOverlay, type GameErrorPayload } from './game/ErrorOverlay'
 import { ko } from './i18n/ko'
 import { useGameStore } from './store/useGameStore'
 
@@ -72,6 +73,7 @@ function App() {
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
   const [debugPanelOpen, setDebugPanelOpen] = useState(false)
+  const [gameError, setGameError] = useState<GameErrorPayload | null>(null)
   const [debugRuntime, setDebugRuntime] = useState<DebugRuntimeSnapshot>({
     renderer: '알 수 없음',
     fps: 0,
@@ -208,7 +210,33 @@ function App() {
 
   useEffect(() => {
     if (!gameRef.current) {
-      gameRef.current = createGame('game-root', () => setSceneReady(true))
+      const mountNode = gameCanvasContainerRef.current
+
+      if (!mountNode) {
+        console.error('[game-init] Canvas mount node not found (#game-root)')
+        return
+      }
+
+      const mountRect = mountNode.getBoundingClientRect()
+      if (mountRect.width <= 0 || mountRect.height <= 0) {
+        console.error('[game-init] Canvas mount node has invalid size', {
+          width: mountRect.width,
+          height: mountRect.height,
+        })
+      }
+
+      try {
+        gameRef.current = createGame(
+          mountNode,
+          () => setSceneReady(true),
+          (payload) => {
+            setGameError(payload)
+          },
+        )
+      } catch (error) {
+        console.error('[game-init] createGame failed in App', { error })
+        return
+      }
     }
 
     const frame = window.requestAnimationFrame(() => {
@@ -220,8 +248,19 @@ function App() {
       gameRef.current?.destroy(true)
       gameRef.current = null
       setSceneReady(false)
+      setGameError(null)
     }
   }, [focusGameCanvas, setSceneReady])
+
+  useEffect(() => {
+    if (!gameError) {
+      return
+    }
+
+    const sceneLabel = gameError.sceneKey ? ` / scene=${gameError.sceneKey}` : ''
+    const stack = gameError.stack ? `\n\n${gameError.stack}` : ''
+    window.alert(`[게임 오류] ${gameError.source}${sceneLabel}\n${gameError.message}${stack}`)
+  }, [gameError])
 
   useEffect(() => {
     const updateRuntimeSnapshot = () => {
@@ -367,11 +406,11 @@ function App() {
       <div
         ref={gameCanvasContainerRef}
         tabIndex={0}
-        className="border border-slate-700 rounded overflow-hidden w-full max-w-5xl aspect-[5/3] focus:outline-none focus:ring-2 focus:ring-violet-500"
+        className="game-canvas-host relative border border-slate-700 rounded overflow-hidden w-full max-w-5xl aspect-[5/3] focus:outline-none focus:ring-2 focus:ring-violet-500"
         style={{ touchAction: 'none' }}
         aria-label="게임 화면"
       >
-        <div id="game-root" className="w-full h-full" />
+        <ErrorOverlay error={gameError} debugMode={debugModeEnabled} />
       </div>
 
       {debugPanelOpen && (

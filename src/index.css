@@ -47,12 +47,12 @@
     opacity: 0;
   }
 
-  #game-root {
+  .game-canvas-host {
     @apply w-full h-full relative;
     isolation: isolate;
   }
 
-  #game-root canvas {
+  .game-canvas-host canvas {
     touch-action: none;
     display: block !important;
     width: 100% !important;
