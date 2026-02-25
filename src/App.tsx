@@ -72,7 +72,6 @@ function App() {
   const gameCanvasContainerRef = useRef<HTMLDivElement | null>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
-  const [debugPanelOpen, setDebugPanelOpen] = useState(false)
   const [gameError, setGameError] = useState<GameErrorPayload | null>(null)
   const [debugRuntime, setDebugRuntime] = useState<DebugRuntimeSnapshot>({
     renderer: '알 수 없음',
@@ -105,21 +104,9 @@ function App() {
   const sceneReady = useGameStore((state) => state.sceneReady)
   const playerTile = useGameStore((state) => state.playerTile)
   const oakIntroSeen = useGameStore((state) => state.oakIntroSeen)
-  const debugMoveRange = useGameStore((state) => state.debugMoveRange)
-  const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
+  const debugMode = useGameStore((state) => state.debugMode)
+  const toggleDebugMode = useGameStore((state) => state.toggleDebugMode)
   const debugRouteMode: DebugRouteMode = window.__debugRouteMode ?? null
-  const debugModeEnabled = useMemo(() => {
-    const parseDebugFlag = (value: string | null) => {
-      const normalized = value?.trim().toLowerCase() ?? ''
-      return normalized === 'true' || normalized === '1' || normalized === 'on'
-    }
-
-    const params = new URLSearchParams(window.location.search)
-    const queryValue = params.get('debugMode') ?? params.get('debug')
-    const storageValue = window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
-
-    return parseDebugFlag(queryValue) || parseDebugFlag(storageValue)
-  }, [])
 
   const focusGameCanvas = useCallback(() => {
     gameCanvasContainerRef.current?.focus()
@@ -289,19 +276,6 @@ function App() {
   }, [collectSceneSnapshot, getRendererLabel])
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const queryValue = params.get('debugMode') ?? params.get('debug')
-    const storageValue = window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
-
-    console.info('[debug-mode]', {
-      enabled: debugModeEnabled,
-      query: queryValue,
-      storage: storageValue,
-      href: window.location.href,
-    })
-  }, [debugModeEnabled])
-
-  useEffect(() => {
     if (debugRouteMode !== 'battle' || !sceneReady || battle.active) {
       return
     }
@@ -381,9 +355,9 @@ function App() {
       <div className="w-full max-w-5xl flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h1 className="text-xl md:text-2xl font-bold">{ko.app.title}</h1>
-          {debugModeEnabled && (
+          {debugMode && (
             <a
-              href="/debug.html"
+              href="/debug.html?debugMode=true"
               className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 opacity-100 visible md:text-sm hover:bg-slate-700 active:bg-slate-700"
               aria-label="디버그 페이지 열기"
             >
@@ -410,10 +384,10 @@ function App() {
         style={{ touchAction: 'none' }}
         aria-label="게임 화면"
       >
-        <ErrorOverlay error={gameError} debugMode={debugModeEnabled} />
+        <ErrorOverlay error={gameError} debugMode={debugMode} />
       </div>
 
-      {debugPanelOpen && (
+      {debugMode && (
         <section className="w-full max-w-5xl rounded border border-cyan-500/50 bg-slate-900/90 p-3 text-xs md:text-sm space-y-3">
           <p className="font-semibold text-cyan-300">디버그 상태 패널</p>
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
@@ -428,7 +402,7 @@ function App() {
               <p className="text-cyan-200 font-semibold">맵 데이터</p>
               <p>현재 타일: ({playerTile.x}, {playerTile.y})</p>
               <p>근처 NPC: {nearbyNpc ?? '없음'}</p>
-              <p>이동 범위 디버그: {debugMoveRange ? '활성' : '비활성'}</p>
+              <p>디버그 모드: {debugMode ? '활성' : '비활성'}</p>
             </div>
 
             <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
@@ -522,13 +496,8 @@ function App() {
           <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
           <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
           <MenuAction
-            label={ko.app.menu.debugMoveRange(debugMoveRange)}
-            onClick={toggleDebugMoveRange}
-            className="col-span-2"
-          />
-          <MenuAction
-            label={ko.app.menu.debugStatusPanel(debugPanelOpen)}
-            onClick={() => setDebugPanelOpen((prev) => !prev)}
+            label={ko.app.menu.debugMode(debugMode)}
+            onClick={toggleDebugMode}
             className="col-span-2"
           />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />

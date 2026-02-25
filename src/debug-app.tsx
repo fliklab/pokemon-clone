@@ -15,10 +15,19 @@ function parseTab(value: string | null): DebugTab {
   return 'assets'
 }
 
+function parseDebugMode(value: string | null): boolean {
+  const normalized = value?.trim().toLowerCase() ?? ''
+  return normalized === 'true' || normalized === '1' || normalized === 'on'
+}
+
 export function DebugApp() {
   const params = useMemo(() => new URLSearchParams(window.location.search), [])
   const [tab, setTab] = useState<DebugTab>(() => parseTab(params.get('tab')))
-  const [debugMode, setDebugMode] = useState(() => params.get('debugMode') === 'true')
+  const [debugMode, setDebugMode] = useState(() => {
+    const queryValue = params.get('debugMode') ?? params.get('debug')
+    const storageValue = window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
+    return parseDebugMode(queryValue) || parseDebugMode(storageValue)
+  })
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search)
@@ -26,6 +35,7 @@ export function DebugApp() {
     search.set('debugMode', String(debugMode))
     const next = `${window.location.pathname}?${search.toString()}`
     window.history.replaceState(null, '', next)
+    window.localStorage.setItem('debugMode', String(debugMode))
   }, [debugMode, tab])
 
   return (
@@ -55,6 +65,15 @@ export function DebugApp() {
           />
           debugMode
         </label>
+      </div>
+
+      <div>
+        <a
+          href="/?debugMode=true"
+          className="inline-flex items-center rounded bg-emerald-700 px-3 py-2 text-sm font-semibold hover:bg-emerald-600 active:bg-emerald-600"
+        >
+          게임으로 돌아가기
+        </a>
       </div>
 
       {tab === 'assets' && <AssetsTab />}

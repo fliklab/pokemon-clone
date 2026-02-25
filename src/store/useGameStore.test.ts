@@ -33,7 +33,7 @@ function resetStore() {
     defeatedTrainers: [],
     money: 120,
     potions: 1,
-    debugMoveRange: false,
+    debugMode: false,
     nearbyNpc: null,
     interactionNonce: 0,
     virtualInput: { up: false, down: false, left: false, right: false },

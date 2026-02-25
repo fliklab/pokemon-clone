@@ -43,8 +43,7 @@ export const ko = {
       shop: '상점 메뉴',
       pc: 'PC 메뉴',
       save: '저장/불러오기',
-      debugMoveRange: (enabled: boolean) => `디버그 이동 범위 ${enabled ? '끄기' : '켜기'}`,
-      debugStatusPanel: (enabled: boolean) => `디버그 상태 패널 ${enabled ? '끄기' : '켜기'}`,
+      debugMode: (enabled: boolean) => `디버그 모드 ${enabled ? '끄기' : '켜기'}`,
       close: '닫기',
     },
     modal: {
