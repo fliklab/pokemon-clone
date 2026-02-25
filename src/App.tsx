@@ -21,7 +21,16 @@ type LayerDebugSnapshot = {
   name: string
   exists: boolean
   visible: boolean
+  alpha: number
   depth: number
+  tint: number
+}
+
+type CameraDebugSnapshot = {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 type OverworldDebugSnapshot = {
@@ -34,6 +43,7 @@ type OverworldDebugSnapshot = {
   cameraZoom: number
   cameraScrollX: number
   cameraScrollY: number
+  cameraBounds: CameraDebugSnapshot
   layers: LayerDebugSnapshot[]
 }
 
@@ -347,10 +357,11 @@ function App() {
                   <p>맵 키: {debugRuntime.overworld.mapKey} ({debugRuntime.overworld.mapLoaded ? '로드됨' : '미로드'})</p>
                   <p>맵 크기: {debugRuntime.overworld.widthTiles}×{debugRuntime.overworld.heightTiles} 타일 ({debugRuntime.overworld.widthPixels}×{debugRuntime.overworld.heightPixels}px)</p>
                   <p>카메라: zoom {debugRuntime.overworld.cameraZoom.toFixed(2)} · scroll {Math.round(debugRuntime.overworld.cameraScrollX)}, {Math.round(debugRuntime.overworld.cameraScrollY)}</p>
+                  <p>카메라 bounds: {Math.round(debugRuntime.overworld.cameraBounds.x)}, {Math.round(debugRuntime.overworld.cameraBounds.y)} / {Math.round(debugRuntime.overworld.cameraBounds.width)}×{Math.round(debugRuntime.overworld.cameraBounds.height)}</p>
                   <div className="space-y-1">
                     {debugRuntime.overworld.layers.map((layer) => (
                       <p key={layer.name}>
-                        {layer.name} · exists:{layer.exists ? 'Y' : 'N'} · visible:{layer.visible ? 'Y' : 'N'} · depth:{layer.depth}
+                        {layer.name} · exists:{layer.exists ? 'Y' : 'N'} · visible:{layer.visible ? 'Y' : 'N'} · alpha:{layer.alpha.toFixed(2)} · depth:{layer.depth} · tint:#{layer.tint.toString(16).padStart(6, '0')}
                       </p>
                     ))}
                   </div>

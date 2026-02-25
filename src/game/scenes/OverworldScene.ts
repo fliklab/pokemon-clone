@@ -18,7 +18,16 @@ type LayerDebugSnapshot = {
   name: string
   exists: boolean
   visible: boolean
+  alpha: number
   depth: number
+  tint: number
+}
+
+type CameraDebugSnapshot = {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 type OverworldDebugSnapshot = {
@@ -31,6 +40,7 @@ type OverworldDebugSnapshot = {
   cameraZoom: number
   cameraScrollX: number
   cameraScrollY: number
+  cameraBounds: CameraDebugSnapshot
   layers: LayerDebugSnapshot[]
 }
 
@@ -86,6 +96,7 @@ export class OverworldScene extends Phaser.Scene {
     cameraZoom: 0,
     cameraScrollX: 0,
     cameraScrollY: 0,
+    cameraBounds: { x: 0, y: 0, width: 0, height: 0 },
     layers: [],
   }
 
@@ -120,11 +131,11 @@ export class OverworldScene extends Phaser.Scene {
     this.npcLayer = map.createLayer('NPC', tiles, 0, 0)?.setScale(WORLD_SCALE)
     this.trainerVisionLayer = map.createLayer('TrainerVision', tiles, 0, 0)?.setScale(WORLD_SCALE)
 
-    groundLayer?.setVisible(true).setDepth(0)
-    this.blockedLayer?.setVisible(true).setDepth(1)
-    this.grassLayer?.setVisible(true).setDepth(2)
-    this.npcLayer?.setVisible(false).setDepth(4)
-    this.trainerVisionLayer?.setVisible(false).setDepth(5)
+    this.applyLayerRenderState(groundLayer, { visible: true, depth: 0, alpha: 1 })
+    this.applyLayerRenderState(this.blockedLayer, { visible: true, depth: 1, alpha: 1 })
+    this.applyLayerRenderState(this.grassLayer, { visible: true, depth: 2, alpha: 1 })
+    this.applyLayerRenderState(this.npcLayer, { visible: false, depth: 4, alpha: 1 })
+    this.applyLayerRenderState(this.trainerVisionLayer, { visible: false, depth: 5, alpha: 0.35 })
 
     this.blockedLayer?.setCollision([TILE_WALL])
 
@@ -209,8 +220,11 @@ export class OverworldScene extends Phaser.Scene {
       this.physics.add.collider(this.player, this.blockedLayer)
     }
 
-    this.cameras.main.setBounds(0, 0, map.widthInPixels * WORLD_SCALE, map.heightInPixels * WORLD_SCALE)
-    this.physics.world.setBounds(0, 0, map.widthInPixels * WORLD_SCALE, map.heightInPixels * WORLD_SCALE)
+    const worldWidth = map.widthInPixels * WORLD_SCALE
+    const worldHeight = map.heightInPixels * WORLD_SCALE
+    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight)
+    this.cameras.main.setScroll(0, 0)
+    this.physics.world.setBounds(0, 0, worldWidth, worldHeight)
     this.cameras.main.startFollow(this.player, true, 0.2, 0.2)
     this.cameras.main.roundPixels = true
     this.updateCameraZoom()
@@ -248,6 +262,13 @@ export class OverworldScene extends Phaser.Scene {
     this.mapDebug.cameraZoom = this.cameras.main.zoom
     this.mapDebug.cameraScrollX = this.cameras.main.scrollX
     this.mapDebug.cameraScrollY = this.cameras.main.scrollY
+    const cameraBounds = this.cameras.main.getBounds()
+    this.mapDebug.cameraBounds = {
+      x: cameraBounds.x,
+      y: cameraBounds.y,
+      width: cameraBounds.width,
+      height: cameraBounds.height,
+    }
     window.__overworldDebug = { ...this.mapDebug }
 
     const virtualInput = useGameStore.getState().virtualInput
@@ -507,10 +528,25 @@ export class OverworldScene extends Phaser.Scene {
     return !(npcTile && npcTile.index > 0)
   }
 
+  private applyLayerRenderState(
+    layer: Phaser.Tilemaps.TilemapLayer | undefined,
+    options: { visible: boolean; depth: number; alpha: number },
+  ) {
+    if (!layer) {
+      return
+    }
+
+    layer.setVisible(options.visible)
+    layer.setAlpha(options.alpha)
+    layer.setDepth(options.depth)
+  }
+
   private updateDebugSnapshot(
     map: Phaser.Tilemaps.Tilemap,
     layers: Array<Phaser.Tilemaps.TilemapLayer | undefined>,
   ) {
+    const cameraBounds = this.cameras.main.getBounds()
+
     this.mapDebug = {
       mapKey: MAP_KEY,
       mapLoaded: true,
@@ -521,11 +557,19 @@ export class OverworldScene extends Phaser.Scene {
       cameraZoom: this.cameras.main.zoom,
       cameraScrollX: this.cameras.main.scrollX,
       cameraScrollY: this.cameras.main.scrollY,
+      cameraBounds: {
+        x: cameraBounds.x,
+        y: cameraBounds.y,
+        width: cameraBounds.width,
+        height: cameraBounds.height,
+      },
       layers: layers.map((layer, index) => ({
         name: layer?.layer.name ?? `unknown-${index}`,
         exists: Boolean(layer),
         visible: layer?.visible ?? false,
+        alpha: layer?.alpha ?? 0,
         depth: layer?.depth ?? 0,
+        tint: (layer as unknown as { tint?: number } | undefined)?.tint ?? 0xffffff,
       })),
     }
 
