@@ -1,0 +1,27 @@
+{
+  "task_id": "ORCH-037-oak-deep-debug",
+  "timestamp": "2026-02-25T10:53:00Z",
+  "repo": "/Users/macbookpro/.openclaw/workspace/repositories/pokemon-clone",
+  "branch": "main",
+  "commit": "55f3b3e",
+  "changes": [
+    {
+      "file": "src/App.tsx",
+      "summary": [
+        "Expanded oak intro tracing to structured JSON payloads with scene list/state/renderer metadata",
+        "Persisted flow logs to window.__oakFlowTrace and emitted final JSON dump on oak modal close",
+        "Hardened overworld restoration: stop active battle scene, run/resume/wake overworld, bringToTop, refresh scale/renderer",
+        "Forced render after oak close via game.step (initial + raf + double-raf) to prevent persistent black frame"
+      ]
+    }
+  ],
+  "validation": {
+    "lint": "pass",
+    "build": "pass"
+  },
+  "git": {
+    "pushed": true,
+    "remote": "origin",
+    "target": "main"
+  }
+}
