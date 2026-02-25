@@ -17,6 +17,14 @@ type SceneSnapshot = {
   paused: boolean
 }
 
+type DebugRuntimeSnapshot = {
+  renderer: string
+  fps: number
+  canvasWidth: number
+  canvasHeight: number
+  scenes: SceneSnapshot[]
+}
+
 declare global {
   interface Window {
     __oakFlowTrace?: Array<Record<string, unknown>>
@@ -28,6 +36,14 @@ function App() {
   const gameCanvasContainerRef = useRef<HTMLDivElement | null>(null)
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
+  const [debugPanelOpen, setDebugPanelOpen] = useState(false)
+  const [debugRuntime, setDebugRuntime] = useState<DebugRuntimeSnapshot>({
+    renderer: '알 수 없음',
+    fps: 0,
+    canvasWidth: 0,
+    canvasHeight: 0,
+    scenes: [],
+  })
   const lastEncounter = useGameStore((state) => state.lastEncounter)
   const battle = useGameStore((state) => state.battle)
   const nearbyNpc = useGameStore((state) => state.nearbyNpc)
@@ -47,6 +63,9 @@ function App() {
   const endBattle = useGameStore((state) => state.endBattle)
   const setVirtualInput = useGameStore((state) => state.setVirtualInput)
   const requestNpcInteract = useGameStore((state) => state.requestNpcInteract)
+  const sceneReady = useGameStore((state) => state.sceneReady)
+  const playerTile = useGameStore((state) => state.playerTile)
+  const oakIntroSeen = useGameStore((state) => state.oakIntroSeen)
   const debugMoveRange = useGameStore((state) => state.debugMoveRange)
   const toggleDebugMoveRange = useGameStore((state) => state.toggleDebugMoveRange)
 
@@ -67,6 +86,18 @@ function App() {
       sleeping: scene.scene.isSleeping(),
       paused: scene.scene.isPaused(),
     }))
+  }, [])
+
+  const getRendererLabel = useCallback((rendererType?: number) => {
+    if (rendererType === 1) {
+      return '캔버스'
+    }
+
+    if (rendererType === 2) {
+      return 'WebGL'
+    }
+
+    return '알 수 없음'
   }, [])
 
   const traceOakFlow = useCallback((stage: string, details: Record<string, unknown> = {}) => {
@@ -141,6 +172,31 @@ function App() {
       setSceneReady(false)
     }
   }, [focusGameCanvas, setSceneReady])
+
+  useEffect(() => {
+    const updateRuntimeSnapshot = () => {
+      const game = gameRef.current
+      if (!game) {
+        return
+      }
+
+      const canvas = game.canvas
+      setDebugRuntime({
+        renderer: getRendererLabel(game.renderer?.type),
+        fps: game.loop.actualFps,
+        canvasWidth: Math.round(canvas?.width ?? 0),
+        canvasHeight: Math.round(canvas?.height ?? 0),
+        scenes: collectSceneSnapshot(),
+      })
+    }
+
+    updateRuntimeSnapshot()
+    const interval = window.setInterval(updateRuntimeSnapshot, 250)
+
+    return () => {
+      window.clearInterval(interval)
+    }
+  }, [collectSceneSnapshot, getRendererLabel])
 
   const encounterText = useMemo(() => {
     if (!lastEncounter) {
@@ -228,6 +284,63 @@ function App() {
         <div id="game-root" className="w-full h-full" />
       </div>
 
+      {debugPanelOpen && (
+        <section className="w-full max-w-5xl rounded border border-cyan-500/50 bg-slate-900/90 p-3 text-xs md:text-sm space-y-3">
+          <p className="font-semibold text-cyan-300">디버그 상태 패널</p>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+              <p className="text-cyan-200 font-semibold">로드 데이터</p>
+              <p>씬 준비: {sceneReady ? '완료' : '대기'}</p>
+              <p>오박사 튜토리얼: {oakIntroSeen ? '완료' : '미완료'}</p>
+              <p>최근 조우: {lastEncounter ? `${lastEncounter.x}, ${lastEncounter.y}` : '없음'}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+              <p className="text-cyan-200 font-semibold">맵 데이터</p>
+              <p>현재 타일: ({playerTile.x}, {playerTile.y})</p>
+              <p>근처 NPC: {nearbyNpc ?? '없음'}</p>
+              <p>이동 범위 디버그: {debugMoveRange ? '활성' : '비활성'}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+              <p className="text-cyan-200 font-semibold">플레이어 데이터</p>
+              <p>리드 포켓몬: {party[0]?.name ?? '없음'} (Lv.{party[0]?.level ?? 0})</p>
+              <p>HP: {party[0]?.hp ?? 0}/{party[0]?.maxHp ?? 0}</p>
+              <p>소지금: ₽{money}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1">
+              <p className="text-cyan-200 font-semibold">렌더 데이터</p>
+              <p>렌더러: {debugRuntime.renderer}</p>
+              <p>FPS: {debugRuntime.fps.toFixed(1)}</p>
+              <p>캔버스: {debugRuntime.canvasWidth}×{debugRuntime.canvasHeight}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-1">
+              <p className="text-cyan-200 font-semibold">상태 데이터</p>
+              <p>활성 모달: {activeModal ?? '없음'}</p>
+              <p>배틀 상태: {battle.active ? battle.phase : '필드 탐험 중'}</p>
+              <p>상호작용 nonce: {interactionNonce}</p>
+            </div>
+
+            <div className="rounded border border-slate-700 bg-slate-950/70 p-2 space-y-1 md:col-span-2 xl:col-span-2">
+              <p className="text-cyan-200 font-semibold">씬 스냅샷</p>
+              {debugRuntime.scenes.length > 0 ? (
+                <div className="space-y-1">
+                  {debugRuntime.scenes.map((scene) => (
+                    <p key={scene.key}>
+                      {scene.key} · active:{scene.active ? 'Y' : 'N'} · visible:{scene.visible ? 'Y' : 'N'} · sleep:{scene.sleeping ? 'Y' : 'N'} · pause:{scene.paused ? 'Y' : 'N'}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p>씬 정보 없음</p>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="md:hidden w-full max-w-sm bg-slate-900 border border-slate-700 rounded p-3 select-none" style={{ touchAction: 'none' }}>
         <p className="text-xs text-slate-300 mb-2">{ko.app.joystick}</p>
         <div className="grid grid-cols-4 gap-2">
@@ -251,6 +364,11 @@ function App() {
           <MenuAction
             label={ko.app.menu.debugMoveRange(debugMoveRange)}
             onClick={toggleDebugMoveRange}
+            className="col-span-2"
+          />
+          <MenuAction
+            label={ko.app.menu.debugStatusPanel(debugPanelOpen)}
+            onClick={() => setDebugPanelOpen((prev) => !prev)}
             className="col-span-2"
           />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
