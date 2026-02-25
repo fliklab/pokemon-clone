@@ -14,6 +14,9 @@ const WILD_ENCOUNTER_CHANCE = 0.35
 const TILE_GROUND = 1
 const TILE_GRASS = 2
 const TILE_WALL = 3
+const TILE_NPC_SHOP = 1
+const TILE_NPC_PC = 2
+const TILE_NPC_OAK = 3
 
 type NearbyNpc = 'shop' | 'pc' | 'oak' | null
 
@@ -276,9 +279,9 @@ export class OverworldScene extends Phaser.Scene {
         'player-down-0',
       )
 
-      const shopNpc = this.findNpcTile(1)
-      const pcNpc = this.findNpcTile(2)
-      const oakNpc = this.findNpcTile(4)
+      const shopNpc = this.findNpcTile(TILE_NPC_SHOP)
+      const pcNpc = this.findNpcTile(TILE_NPC_PC)
+      const oakNpc = this.findNpcTile(TILE_NPC_OAK)
 
       if (shopNpc) {
         this.shopLabelText = this.add.text(
@@ -512,7 +515,7 @@ export class OverworldScene extends Phaser.Scene {
     const mapOnlyDebug = debugRouteMode === 'map'
 
     const steppedTrainer = getGymTrainers().find((entry) => {
-      const pos = trainerPositions[entry.id]
+      const pos = trainerPositions?.[entry.id] 
       return pos?.x === tileX && pos?.y === tileY
     })
 
@@ -618,13 +621,13 @@ export class OverworldScene extends Phaser.Scene {
 
     for (const [dx, dy] of offsets) {
       const tile = this.npcLayer.getTileAt(tileX + dx, tileY + dy)
-      if (tile?.index === 1) {
+      if (tile?.index === TILE_NPC_SHOP) {
         return 'shop'
       }
-      if (tile?.index === 2) {
+      if (tile?.index === TILE_NPC_PC) {
         return 'pc'
       }
-      if (tile?.index === 4) {
+      if (tile?.index === TILE_NPC_OAK) {
         return 'oak'
       }
     }
