@@ -75,6 +75,28 @@ function App() {
     })
   }
 
+  const returnToOverworldInput = useCallback(() => {
+    setVirtualInput('up', false)
+    setVirtualInput('down', false)
+    setVirtualInput('left', false)
+    setVirtualInput('right', false)
+
+    if (!gameRef.current) {
+      return
+    }
+
+    if (!gameRef.current.scene.isActive('overworld')) {
+      gameRef.current.scene.start('overworld')
+    } else {
+      gameRef.current.scene.resume('overworld')
+      gameRef.current.scene.wake('overworld')
+    }
+
+    window.requestAnimationFrame(() => {
+      focusGameCanvas()
+    })
+  }, [focusGameCanvas, setVirtualInput])
+
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
   const canOpenShop = nearbyNpc === 'shop'
   const canOpenPc = nearbyNpc === 'pc'
@@ -309,7 +331,14 @@ function App() {
       <BaseModal open={activeModal === 'oak-intro'} onClose={closeModal} title={ko.app.modal.oakTitle}>
         <div className="space-y-3 text-sm">
           <p className="text-slate-200">{ko.app.modal.oakIntro}</p>
-          <button className="w-full rounded bg-emerald-700 active:bg-emerald-600 p-3 font-semibold" onClick={() => { markOakIntroSeen(); closeModal() }}>
+          <button
+            className="w-full rounded bg-emerald-700 active:bg-emerald-600 p-3 font-semibold"
+            onClick={() => {
+              markOakIntroSeen()
+              closeModal()
+              returnToOverworldInput()
+            }}
+          >
             {ko.app.modal.startAdventure}
           </button>
         </div>
