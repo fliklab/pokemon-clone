@@ -73,6 +73,7 @@ function App() {
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
   const [gameError, setGameError] = useState<GameErrorPayload | null>(null)
+  const [errorDismissed, setErrorDismissed] = useState(false)
   const [debugRuntime, setDebugRuntime] = useState<DebugRuntimeSnapshot>({
     renderer: '알 수 없음',
     fps: 0,
@@ -217,6 +218,7 @@ function App() {
           mountNode,
           () => setSceneReady(true),
           (payload) => {
+            setErrorDismissed(false)
             setGameError(payload)
           },
         )
@@ -236,18 +238,9 @@ function App() {
       gameRef.current = null
       setSceneReady(false)
       setGameError(null)
+      setErrorDismissed(false)
     }
   }, [focusGameCanvas, setSceneReady])
-
-  useEffect(() => {
-    if (!gameError) {
-      return
-    }
-
-    const sceneLabel = gameError.sceneKey ? ` / scene=${gameError.sceneKey}` : ''
-    const stack = gameError.stack ? `\n\n${gameError.stack}` : ''
-    window.alert(`[게임 오류] ${gameError.source}${sceneLabel}\n${gameError.message}${stack}`)
-  }, [gameError])
 
   useEffect(() => {
     const updateRuntimeSnapshot = () => {
@@ -384,7 +377,11 @@ function App() {
         style={{ touchAction: 'none' }}
         aria-label="게임 화면"
       >
-        <ErrorOverlay error={gameError} debugMode={debugMode} />
+        <ErrorOverlay
+          error={gameError && !errorDismissed ? gameError : null}
+          debugMode={debugMode}
+          onConfirm={() => setErrorDismissed(true)}
+        />
       </div>
 
       {debugMode && (
