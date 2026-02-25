@@ -69,12 +69,27 @@ function App() {
   }, [lastEncounter])
 
   const openModal = (modal: Exclude<ModalType, null>) => setActiveModal(modal)
-  const closeModal = () => {
+  const logOverworldSceneState = useCallback((reason: string) => {
+    const game = gameRef.current
+    const scene = game?.scene
+
+    console.debug('[oak-intro]', reason, {
+      activeModal,
+      hasGame: Boolean(game),
+      hasOverworld: Boolean(scene?.keys?.overworld),
+      isOverworldActive: scene?.isActive('overworld') ?? false,
+      isOverworldVisible: scene?.isVisible('overworld') ?? false,
+      isOverworldSleeping: scene?.isSleeping('overworld') ?? false,
+      isOverworldPaused: scene?.isPaused('overworld') ?? false,
+    })
+  }, [activeModal])
+
+  const closeModal = useCallback(() => {
     setActiveModal(null)
     window.requestAnimationFrame(() => {
       focusGameCanvas()
     })
-  }
+  }, [focusGameCanvas])
 
   const returnToOverworldInput = useCallback(() => {
     setVirtualInput('up', false)
@@ -87,16 +102,27 @@ function App() {
     }
 
     if (!gameRef.current.scene.isActive('overworld')) {
+      logOverworldSceneState('overworld scene inactive, starting scene')
       gameRef.current.scene.start('overworld')
     } else {
+      logOverworldSceneState('overworld scene active, resume/wake scene')
       gameRef.current.scene.resume('overworld')
       gameRef.current.scene.wake('overworld')
     }
 
+    logOverworldSceneState('overworld scene transition complete')
+
     window.requestAnimationFrame(() => {
       focusGameCanvas()
     })
-  }, [focusGameCanvas, setVirtualInput])
+  }, [focusGameCanvas, logOverworldSceneState, setVirtualInput])
+
+  const closeOakIntro = useCallback(() => {
+    logOverworldSceneState('closing oak intro modal')
+    markOakIntroSeen()
+    closeModal()
+    returnToOverworldInput()
+  }, [closeModal, logOverworldSceneState, markOakIntroSeen, returnToOverworldInput])
 
   const endedBattle = battle.phase === 'caught' || battle.phase === 'resolved' || battle.phase === 'lost' || battle.phase === 'escaped'
   const canOpenShop = nearbyNpc === 'shop'
@@ -150,15 +176,17 @@ function App() {
     const leavingOakIntro = previousModal === 'oak-intro' && activeModal !== 'oak-intro'
 
     if (enteringOakIntro && gameRef.current?.scene.isActive('overworld')) {
+      logOverworldSceneState('entering oak intro modal, pausing overworld')
       gameRef.current.scene.pause('overworld')
     }
 
     if (leavingOakIntro) {
+      logOverworldSceneState('leaving oak intro modal, restoring overworld input')
       returnToOverworldInput()
     }
 
     previousModalRef.current = activeModal
-  }, [activeModal, returnToOverworldInput])
+  }, [activeModal, logOverworldSceneState, returnToOverworldInput])
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
@@ -345,15 +373,12 @@ function App() {
         </div>
       </BaseModal>
 
-      <BaseModal open={activeModal === 'oak-intro'} onClose={closeModal} title={ko.app.modal.oakTitle}>
+      <BaseModal open={activeModal === 'oak-intro'} onClose={closeOakIntro} title={ko.app.modal.oakTitle}>
         <div className="space-y-3 text-sm">
           <p className="text-slate-200">{ko.app.modal.oakIntro}</p>
           <button
             className="w-full rounded bg-emerald-700 active:bg-emerald-600 p-3 font-semibold"
-            onClick={() => {
-              markOakIntroSeen()
-              closeModal()
-            }}
+            onClick={closeOakIntro}
           >
             {ko.app.modal.startAdventure}
           </button>
