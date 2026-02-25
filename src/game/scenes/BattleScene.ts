@@ -155,9 +155,16 @@ export class BattleScene extends Phaser.Scene {
       return
     }
 
-    if (phase === 'resolved' || phase === 'caught') {
+    if (phase === 'resolved') {
       this.playTone(420)
       this.tweens.add({ targets: this.playerSprite, y: '-=8', yoyo: true, duration: 140, repeat: 2 })
+      this.cameras.main.flash(140, 120, 255, 160)
+      return
+    }
+
+    if (phase === 'caught') {
+      this.playTone(520)
+      this.tweens.add({ targets: this.enemySprite, x: '+=12', yoyo: true, duration: 90, repeat: 3 })
       this.cameras.main.flash(140, 120, 255, 160)
       return
     }

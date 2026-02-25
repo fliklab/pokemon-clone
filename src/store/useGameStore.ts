@@ -61,6 +61,10 @@ type GameState = {
 }
 
 const STORAGE_KEY = 'pokemon-clone-save-v1'
+const PARTY_CAP = 6
+const LOSE_PENALTY = 30
+const RESPAWN_TILE = { x: 3, y: 2 }
+const AUTOSAVE_DELAY_MS = 300
 
 const trainerRoster: TrainerBattle[] = [
   {
@@ -119,6 +123,18 @@ function getPersistedState(): PersistedState | null {
   }
 }
 
+function toPersistedPayload(state: GameState): PersistedState {
+  return {
+    playerTile: state.playerTile,
+    lastEncounter: state.lastEncounter,
+    party: state.party,
+    badges: state.badges,
+    defeatedTrainers: state.defeatedTrainers,
+    money: state.money,
+    potions: state.potions,
+  }
+}
+
 function persistState(state: GameState) {
   if (typeof window === 'undefined') {
     return
@@ -128,17 +144,33 @@ function persistState(state: GameState) {
     return
   }
 
-  const payload: PersistedState = {
-    playerTile: state.playerTile,
-    lastEncounter: state.lastEncounter,
-    party: state.party,
-    badges: state.badges,
-    defeatedTrainers: state.defeatedTrainers,
-    money: state.money,
-    potions: state.potions,
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersistedPayload(state)))
+}
+
+let autosaveTimer: ReturnType<typeof setTimeout> | undefined
+let lastPersistedSnapshot = ''
+
+function scheduleAutosave(state: GameState) {
+  if (typeof window === 'undefined') {
+    return
   }
 
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+  const nextSnapshot = JSON.stringify(toPersistedPayload(state))
+  if (nextSnapshot === lastPersistedSnapshot) {
+    return
+  }
+
+  if (autosaveTimer) {
+    window.clearTimeout(autosaveTimer)
+  }
+
+  autosaveTimer = window.setTimeout(() => {
+    if (typeof window.localStorage?.setItem === 'function') {
+      window.localStorage.setItem(STORAGE_KEY, nextSnapshot)
+      lastPersistedSnapshot = nextSnapshot
+    }
+    autosaveTimer = undefined
+  }, AUTOSAVE_DELAY_MS)
 }
 
 function applyProgressionAfterWin(state: GameState): Pick<GameState, 'party' | 'badges' | 'money'> {
@@ -163,6 +195,15 @@ function toCaughtPartyMonster(enemy: Battler): PartyMonster {
     id: `${enemy.name.toLowerCase()}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     exp: 0,
     nextLevelExp: expForNextLevel(enemy.level),
+  }
+}
+
+function applyLossPenalty(state: GameState): Pick<GameState, 'party' | 'money' | 'playerTile'> {
+  const healedParty = state.party.map((monster) => ({ ...monster, hp: monster.maxHp, status: 'none' as const }))
+  return {
+    party: healedParty,
+    money: Math.max(0, state.money - LOSE_PENALTY),
+    playerTile: RESPAWN_TILE,
   }
 }
 
@@ -234,7 +275,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     })
   },
   saveGame: () => {
-    persistState(get())
+    const state = get()
+    persistState(state)
+    lastPersistedSnapshot = JSON.stringify(toPersistedPayload(state))
   },
   loadGame: () => {
     const saved = getPersistedState()
@@ -341,6 +384,16 @@ export const useGameStore = create<GameState>((set, get) => ({
           battle: {
             ...battle,
             message: ko.store.cannotCatchTrainerMonster,
+          },
+        })
+        return
+      }
+
+      if (get().party.length >= PARTY_CAP) {
+        set({
+          battle: {
+            ...battle,
+            message: ko.store.partyFull,
           },
         })
         return
@@ -513,11 +566,21 @@ export const useGameStore = create<GameState>((set, get) => ({
       },
     })
   },
-  endBattle: () => set((state) => ({ battle: initialBattleState(state.party) })),
+  endBattle: () => set((state) => {
+    if (state.battle.phase === 'lost') {
+      const penalized = applyLossPenalty(state)
+      return {
+        ...penalized,
+        battle: initialBattleState(penalized.party),
+      }
+    }
+
+    return { battle: initialBattleState(state.party) }
+  }),
 }))
 
 useGameStore.subscribe((state) => {
-  persistState(state)
+  scheduleAutosave(state)
 })
 
 export function getGymTrainers(): TrainerBattle[] {

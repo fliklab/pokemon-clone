@@ -78,6 +78,7 @@ export const ko = {
     escaped: '무사히 도망쳤다!',
     failedEscape: '도망치지 못했다!',
     cannotCatchTrainerMonster: '트레이너의 몬스터는 포획할 수 없다.',
+    partyFull: '파티가 가득 차서 더 이상 포획할 수 없다. (최대 6마리)',
     caught: (name: string) => `${name} 포획 성공!`,
     brokeFree: (name: string) => `${name} 이(가) 볼에서 빠져나왔다!`,
     noPotion: '포션이 없다! 상점에서 구매하자.',
