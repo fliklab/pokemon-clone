@@ -4,7 +4,7 @@ import type Phaser from 'phaser'
 import { resolveSkillSlots } from './battle/skills'
 import type { ItemId } from './battle/types'
 import { createGame } from './game/createGame'
-import { ErrorOverlay, type GameErrorPayload } from './game/ErrorOverlay'
+import { ErrorOverlay, subscribeWarn, type GameErrorPayload } from './game/ErrorOverlay'
 import { ko } from './i18n/ko'
 import { useGameStore } from './store/useGameStore'
 import './App.css'
@@ -74,6 +74,7 @@ function App() {
   const [activeModal, setActiveModal] = useState<ModalType>(null)
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null)
   const [gameError, setGameError] = useState<GameErrorPayload | null>(null)
+  const [warningMessage, setWarningMessage] = useState<string | null>(null)
   const [errorDismissed, setErrorDismissed] = useState(false)
   const [debugRuntime, setDebugRuntime] = useState<DebugRuntimeSnapshot>({
     renderer: '알 수 없음',
@@ -93,6 +94,8 @@ function App() {
   const itemBag = useGameStore((state) => state.itemBag)
   const setSceneReady = useGameStore((state) => state.setSceneReady)
   const chooseBattleCommand = useGameStore((state) => state.chooseBattleCommand)
+  const setBattleUiMenu = useGameStore((state) => state.setBattleUiMenu)
+  const toggleBattleUiMenu = useGameStore((state) => state.toggleBattleUiMenu)
   const switchBattleMonster = useGameStore((state) => state.switchBattleMonster)
   const healPartyAtPc = useGameStore((state) => state.healPartyAtPc)
   const buyPotion = useGameStore((state) => state.buyPotion)
@@ -240,6 +243,7 @@ function App() {
       gameRef.current = null
       setSceneReady(false)
       setGameError(null)
+      setWarningMessage(null)
       setErrorDismissed(false)
     }
   }, [focusGameCanvas, setSceneReady])
@@ -269,6 +273,17 @@ function App() {
       window.clearInterval(interval)
     }
   }, [collectSceneSnapshot, getRendererLabel])
+
+  useEffect(() => {
+    const unsubscribe = subscribeWarn((message) => {
+      setWarningMessage(message)
+      setErrorDismissed(false)
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [])
 
   useEffect(() => {
     if (debugRouteMode !== 'battle' || !sceneReady || battle.active) {
@@ -345,6 +360,12 @@ function App() {
   ), [])
 
   useEffect(() => {
+    if (battle.phase !== 'player_turn' && battle.uiMenu !== null) {
+      setBattleUiMenu(null)
+    }
+  }, [battle.phase, battle.uiMenu, setBattleUiMenu])
+
+  useEffect(() => {
     if (interactionNonce === 0) {
       return
     }
@@ -393,8 +414,12 @@ function App() {
       >
         <ErrorOverlay
           error={gameError && !errorDismissed ? gameError : null}
+          warning={warningMessage && !errorDismissed ? warningMessage : null}
           debugMode={debugMode}
-          onConfirm={() => setErrorDismissed(true)}
+          onConfirm={() => {
+            setErrorDismissed(true)
+            setWarningMessage(null)
+          }}
         />
       </div>
 
@@ -688,30 +713,76 @@ function App() {
           {battle.phase === 'player_turn' && (
             <div className="space-y-2">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {skillSlots.map((skill) => (
-                  <button
-                    key={skill.id}
-                    className="bg-emerald-700 p-2 rounded"
-                    onClick={() => chooseBattleCommand('fight', skill.id)}
-                  >
-                    {skill.name}
-                  </button>
-                ))}
+                <button
+                  className={`p-2 rounded ${battle.uiMenu === 'fight' ? 'bg-emerald-500 text-slate-950 font-semibold' : 'bg-emerald-700'}`}
+                  onClick={() => toggleBattleUiMenu('fight')}
+                >
+                  {ko.app.battle.fight}
+                </button>
+                <button
+                  className={`p-2 rounded ${battle.uiMenu === 'item' ? 'bg-cyan-500 text-slate-950 font-semibold' : 'bg-cyan-700'}`}
+                  onClick={() => toggleBattleUiMenu('item')}
+                >
+                  {ko.app.battle.item(bagEntries.reduce((sum, entry) => sum + (itemBag[entry.id] ?? 0), 0))}
+                </button>
+                <button
+                  className={`p-2 rounded ${battle.uiMenu === 'catch' ? 'bg-indigo-500 text-slate-950 font-semibold' : 'bg-indigo-700'}`}
+                  onClick={() => toggleBattleUiMenu('catch')}
+                >
+                  {ko.app.battle.catch}
+                </button>
+                <button
+                  className={`p-2 rounded ${battle.uiMenu === 'run' ? 'bg-rose-500 text-slate-950 font-semibold' : 'bg-rose-700'}`}
+                  onClick={() => toggleBattleUiMenu('run')}
+                >
+                  {ko.app.battle.run}
+                </button>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                {bagEntries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    className="bg-cyan-700 p-2 rounded disabled:opacity-50"
-                    onClick={() => consumeBagItem(entry.id)}
-                    disabled={(itemBag[entry.id] ?? 0) <= 0}
-                  >
-                    {entry.label} x{itemBag[entry.id] ?? 0}
+
+              {battle.uiMenu === 'fight' && (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 rounded border border-emerald-700/70 bg-slate-950/70 p-2">
+                  {skillSlots.map((skill) => (
+                    <button
+                      key={skill.id}
+                      className="bg-emerald-700 p-2 rounded"
+                      onClick={() => chooseBattleCommand('fight', skill.id)}
+                    >
+                      {skill.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {battle.uiMenu === 'item' && (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 rounded border border-cyan-700/70 bg-slate-950/70 p-2">
+                  {bagEntries.map((entry) => (
+                    <button
+                      key={entry.id}
+                      className="bg-cyan-700 p-2 rounded disabled:opacity-50"
+                      onClick={() => consumeBagItem(entry.id)}
+                      disabled={(itemBag[entry.id] ?? 0) <= 0}
+                    >
+                      {entry.label} x{itemBag[entry.id] ?? 0}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {battle.uiMenu === 'catch' && (
+                <div className="rounded border border-indigo-700/70 bg-slate-950/70 p-2">
+                  <button className="w-full bg-indigo-700 p-2 rounded" onClick={() => chooseBattleCommand('catch')}>
+                    {ko.app.battle.catch}
                   </button>
-                ))}
-                <button className="bg-indigo-700 p-2 rounded" onClick={() => chooseBattleCommand('catch')}>{ko.app.battle.catch}</button>
-                <button className="bg-rose-700 p-2 rounded" onClick={() => chooseBattleCommand('run')}>{ko.app.battle.run}</button>
-              </div>
+                </div>
+              )}
+
+              {battle.uiMenu === 'run' && (
+                <div className="rounded border border-rose-700/70 bg-slate-950/70 p-2">
+                  <button className="w-full bg-rose-700 p-2 rounded" onClick={() => chooseBattleCommand('run')}>
+                    {ko.app.battle.run}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

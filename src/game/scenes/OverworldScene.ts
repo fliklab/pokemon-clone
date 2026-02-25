@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { ko } from '../../i18n/ko'
+import { warn } from '../ErrorOverlay'
 import { getGymTrainers, useGameStore } from '../../store/useGameStore'
 import mapJsonUrl from '../../assets/maps/overworld.json?url'
 import tilesetImageUrl from '../../assets/maps/overworld-tiles.png?url'
@@ -136,6 +137,7 @@ export class OverworldScene extends Phaser.Scene {
   private warpCooldownUntil = 0
   private mapLoadSucceeded = false
   private tilesetLoadSucceeded = false
+  private tilesetFallbackWarned = false
   private mapDebug: OverworldDebugSnapshot = {
     mapKey: MAP_KEY,
     mapLoaded: false,
@@ -158,6 +160,7 @@ export class OverworldScene extends Phaser.Scene {
     try {
       this.mapLoadSucceeded = false
       this.tilesetLoadSucceeded = false
+      this.tilesetFallbackWarned = false
 
       this.load.on(Phaser.Loader.Events.FILE_COMPLETE, (key: string, type: string) => {
         if (key === MAP_KEY && type === 'tilemapJSON') {
@@ -177,6 +180,10 @@ export class OverworldScene extends Phaser.Scene {
             primaryUrl: TILESET_URL,
             fallbackUrl: TILESET_FALLBACK_URL,
           })
+          if (!this.tilesetFallbackWarned) {
+            this.tilesetFallbackWarned = true
+            warn('Tileset fallback used')
+          }
           return
         }
 
@@ -219,6 +226,10 @@ export class OverworldScene extends Phaser.Scene {
             primaryUrl: TILESET_URL,
             fallbackUrl: TILESET_FALLBACK_URL,
           })
+          if (!this.tilesetFallbackWarned) {
+            this.tilesetFallbackWarned = true
+            warn('Tileset fallback used')
+          }
         }
       })
     } catch (error) {
