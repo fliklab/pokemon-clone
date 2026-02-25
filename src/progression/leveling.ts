@@ -59,16 +59,17 @@ export function createWildEnemy(playerLevel = 5, badges = 0): Battler {
   const variance = Math.floor(Math.random() * 3) - 1
   const level = Math.max(3, playerLevel - 1 + badges + variance)
   const baseHp = 20 + level * 2
+  const roll = Math.random() > 0.5
 
   return {
-    name: Math.random() > 0.5 ? 'Flameling' : 'Aquava',
+    name: roll ? 'Flameling' : 'Aquava',
     level,
     hp: baseHp,
     maxHp: baseHp,
     attack: 8 + level,
     defense: 7 + level,
     speed: 7 + level,
-    type: Math.random() > 0.5 ? 'fire' : 'water',
+    type: roll ? 'fire' : 'water',
     status: 'none',
   }
 }
