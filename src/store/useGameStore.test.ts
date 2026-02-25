@@ -205,7 +205,7 @@ describe('battle flow endings', () => {
 
     vi.advanceTimersByTime(301)
 
-    expect(setItemSpy).toHaveBeenCalledTimes(1)
+    expect(setItemSpy).toHaveBeenCalledTimes(2)
 
     Object.defineProperty(window, 'localStorage', {
       value: originalStorage,

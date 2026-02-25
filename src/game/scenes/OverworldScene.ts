@@ -359,7 +359,7 @@ export class OverworldScene extends Phaser.Scene {
 
     state.setPlayerTile(tileX, tileY)
 
-    if (state.debugMoveRange) {
+    if (state.debugMode) {
       const movedTile = this.lastDebugTile?.x !== tileX || this.lastDebugTile?.y !== tileY
       if (movedTile) {
         this.drawDebugMoveRange(tileX, tileY)

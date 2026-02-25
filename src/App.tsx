@@ -368,19 +368,10 @@ function App() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center p-3 md:p-6 gap-4">
-      <div className="w-full max-w-5xl flex items-center justify-between">
+      <div className="w-full max-w-5xl flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h1 className="text-xl md:text-2xl font-bold">{ko.app.title}</h1>
-          {debugMode && (
-            <a
-              href="/debug.html?debugMode=true"
-              className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 opacity-100 visible md:text-sm hover:bg-slate-700 active:bg-slate-700"
-              aria-label="디버그 페이지 열기"
-            >
-              <span aria-hidden="true">🔧</span>
-              <span>debug</span>
-            </a>
-          )}
+          <DebugModeToggle compact enabled={debugMode} onToggle={toggleDebugMode} />
         </div>
         <button
           className="h-10 w-10 rounded-full bg-slate-800 border border-slate-600 text-xl leading-none hover:bg-slate-700 active:bg-slate-700"
@@ -538,11 +529,7 @@ function App() {
         <div className="grid grid-cols-2 gap-2 text-sm">
           <MenuAction label={ko.app.menu.party} onClick={() => openModal('party')} />
           <MenuAction label={ko.app.menu.inventory} onClick={() => openModal('inventory')} />
-          <MenuAction
-            label={ko.app.menu.debugMode(debugMode)}
-            onClick={toggleDebugMode}
-            className="col-span-2"
-          />
+          <DebugModeToggle enabled={debugMode} onToggle={toggleDebugMode} className="col-span-2" />
           <MenuAction label={ko.app.menu.save} onClick={() => openModal('save')} className="col-span-2" />
         </div>
       </BaseModal>
@@ -778,6 +765,30 @@ function MenuAction({ label, onClick, className, disabled = false }: MenuActionP
       {label}
     </button>
   )
+}
+
+type DebugModeToggleProps = {
+  enabled: boolean
+  onToggle: () => void
+  className?: string
+  compact?: boolean
+}
+
+function DebugModeToggle({ enabled, onToggle, className, compact = false }: DebugModeToggleProps) {
+  if (compact) {
+    return (
+      <button
+        type="button"
+        className={`inline-flex shrink-0 items-center rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-100 md:text-sm hover:bg-slate-700 active:bg-slate-700 ${className ?? ''}`}
+        onClick={onToggle}
+        aria-pressed={enabled}
+      >
+        {ko.app.menu.debugMode(enabled)}
+      </button>
+    )
+  }
+
+  return <MenuAction label={ko.app.menu.debugMode(enabled)} onClick={onToggle} className={className} />
 }
 
 type DirectionButtonProps = {

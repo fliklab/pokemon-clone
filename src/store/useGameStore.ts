@@ -42,7 +42,6 @@ type LegacyPersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'pa
 type GameState = {
   sceneReady: boolean
   debugMode: boolean
-  debugMoveRange: boolean
   playerTile: { x: number; y: number }
   lastEncounter: Encounter | null
   battle: BattleSnapshot & { active: boolean; turn: number; trainerBattle: TrainerBattle | null }
@@ -283,14 +282,17 @@ function readDebugModeFlag(): boolean {
 
   const params = new URLSearchParams(window.location.search)
   const queryValue = params.get('debugMode') ?? params.get('debug')
-  const storageValue = window.localStorage?.getItem('debugMode') ?? window.localStorage?.getItem('debug')
+  const canReadStorage = typeof window.localStorage?.getItem === 'function'
+  const storageValue = canReadStorage
+    ? window.localStorage.getItem('debugMode') ?? window.localStorage.getItem('debug')
+    : null
 
   return parseDebugFlag(queryValue) || parseDebugFlag(storageValue)
 }
 
 function defaultState(): Pick<
   GameState,
-  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMode' | 'debugMoveRange' | 'oakIntroSeen'
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMode' | 'oakIntroSeen'
 > {
   const saved = getPersistedState()
   if (saved) {
@@ -304,7 +306,6 @@ function defaultState(): Pick<
       itemBag: saved.itemBag,
       battle: saved.battle,
       debugMode: saved.debugMode,
-      debugMoveRange: saved.debugMode,
       oakIntroSeen: saved.oakIntroSeen,
     }
   }
@@ -319,7 +320,6 @@ function defaultState(): Pick<
     itemBag: initialItemBag,
     battle: initialBattleState(initialParty),
     debugMode: readDebugModeFlag(),
-    debugMoveRange: readDebugModeFlag(),
     oakIntroSeen: false,
   }
 }
@@ -329,7 +329,6 @@ const bootState = defaultState()
 export const useGameStore = create<GameState>((set, get) => ({
   sceneReady: false,
   debugMode: bootState.debugMode,
-  debugMoveRange: bootState.debugMoveRange,
   playerTile: bootState.playerTile,
   lastEncounter: bootState.lastEncounter,
   battle: bootState.battle,
@@ -347,7 +346,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   toggleDebugMode: () => set((state) => {
     const nextDebugMode = !state.debugMode
     persistDebugMode(nextDebugMode)
-    return { debugMode: nextDebugMode, debugMoveRange: nextDebugMode }
+    return { debugMode: nextDebugMode }
   }),
   setPlayerTile: (x, y) => set({ playerTile: { x, y } }),
   setVirtualInput: (direction, active) => {
@@ -433,7 +432,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       return {
       sceneReady: true,
       debugMode: false,
-      debugMoveRange: false,
       playerTile: { x: 3, y: 2 },
       lastEncounter: null,
       battle: initialBattleState(freshParty),
