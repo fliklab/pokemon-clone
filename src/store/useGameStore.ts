@@ -32,7 +32,7 @@ type ItemBag = Record<ItemId, number>
 
 type PersistedState = Pick<
   GameState,
-  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMoveRange' | 'oakIntroSeen'
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMode' | 'oakIntroSeen'
 > & {
   version: 3
 }
@@ -41,6 +41,7 @@ type LegacyPersistedState = Pick<GameState, 'playerTile' | 'lastEncounter' | 'pa
 
 type GameState = {
   sceneReady: boolean
+  debugMode: boolean
   debugMoveRange: boolean
   playerTile: { x: number; y: number }
   lastEncounter: Encounter | null
@@ -56,7 +57,7 @@ type GameState = {
   nearbyNpc: NearbyNpc
   interactionNonce: number
   setSceneReady: (ready: boolean) => void
-  toggleDebugMoveRange: () => void
+  toggleDebugMode: () => void
   setPlayerTile: (x: number, y: number) => void
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
@@ -137,9 +138,12 @@ function getPersistedState(): PersistedState | null {
   const raw = window.localStorage.getItem(STORAGE_KEY)
   if (raw) {
     try {
-      const parsed = JSON.parse(raw) as PersistedState
+      const parsed = JSON.parse(raw) as PersistedState & { debugMoveRange?: boolean }
       if (parsed.version === 3) {
-        return parsed
+        return {
+          ...parsed,
+          debugMode: parsed.debugMode ?? parsed.debugMoveRange ?? readDebugModeFlag(),
+        }
       }
     } catch {
       return null
@@ -160,7 +164,7 @@ function getPersistedState(): PersistedState | null {
         potion: legacy.potions,
       },
       battle: initialBattleState(legacy.party),
-      debugMoveRange: false,
+      debugMode: readDebugModeFlag(),
       oakIntroSeen: false,
       version: 3,
     }
@@ -179,10 +183,18 @@ function toPersistedPayload(state: GameState): PersistedState {
     money: state.money,
     itemBag: state.itemBag,
     battle: state.battle,
-    debugMoveRange: state.debugMoveRange,
+    debugMode: state.debugMode,
     oakIntroSeen: state.oakIntroSeen,
     version: 3,
   }
+}
+
+function persistDebugMode(debugMode: boolean) {
+  if (typeof window === 'undefined' || typeof window.localStorage?.setItem !== 'function') {
+    return
+  }
+
+  window.localStorage.setItem('debugMode', String(debugMode))
 }
 
 function persistState(state: GameState) {
@@ -195,6 +207,7 @@ function persistState(state: GameState) {
   }
 
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toPersistedPayload(state)))
+  persistDebugMode(state.debugMode)
 }
 
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined
@@ -217,6 +230,7 @@ function scheduleAutosave(state: GameState) {
   autosaveTimer = window.setTimeout(() => {
     if (typeof window.localStorage?.setItem === 'function') {
       window.localStorage.setItem(STORAGE_KEY, nextSnapshot)
+      persistDebugMode(state.debugMode)
       lastPersistedSnapshot = nextSnapshot
     }
     autosaveTimer = undefined
@@ -257,9 +271,26 @@ function applyLossPenalty(state: GameState): Pick<GameState, 'party' | 'money' |
   }
 }
 
+function readDebugModeFlag(): boolean {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const parseDebugFlag = (value: string | null) => {
+    const normalized = value?.trim().toLowerCase() ?? ''
+    return normalized === 'true' || normalized === '1' || normalized === 'on'
+  }
+
+  const params = new URLSearchParams(window.location.search)
+  const queryValue = params.get('debugMode') ?? params.get('debug')
+  const storageValue = window.localStorage?.getItem('debugMode') ?? window.localStorage?.getItem('debug')
+
+  return parseDebugFlag(queryValue) || parseDebugFlag(storageValue)
+}
+
 function defaultState(): Pick<
   GameState,
-  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMoveRange' | 'oakIntroSeen'
+  'playerTile' | 'lastEncounter' | 'party' | 'badges' | 'defeatedTrainers' | 'money' | 'itemBag' | 'battle' | 'debugMode' | 'debugMoveRange' | 'oakIntroSeen'
 > {
   const saved = getPersistedState()
   if (saved) {
@@ -272,7 +303,8 @@ function defaultState(): Pick<
       money: saved.money,
       itemBag: saved.itemBag,
       battle: saved.battle,
-      debugMoveRange: saved.debugMoveRange,
+      debugMode: saved.debugMode,
+      debugMoveRange: saved.debugMode,
       oakIntroSeen: saved.oakIntroSeen,
     }
   }
@@ -286,7 +318,8 @@ function defaultState(): Pick<
     money: 120,
     itemBag: initialItemBag,
     battle: initialBattleState(initialParty),
-    debugMoveRange: false,
+    debugMode: readDebugModeFlag(),
+    debugMoveRange: readDebugModeFlag(),
     oakIntroSeen: false,
   }
 }
@@ -295,6 +328,7 @@ const bootState = defaultState()
 
 export const useGameStore = create<GameState>((set, get) => ({
   sceneReady: false,
+  debugMode: bootState.debugMode,
   debugMoveRange: bootState.debugMoveRange,
   playerTile: bootState.playerTile,
   lastEncounter: bootState.lastEncounter,
@@ -310,7 +344,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   nearbyNpc: null,
   interactionNonce: 0,
   setSceneReady: (ready) => set({ sceneReady: ready }),
-  toggleDebugMoveRange: () => set((state) => ({ debugMoveRange: !state.debugMoveRange })),
+  toggleDebugMode: () => set((state) => {
+    const nextDebugMode = !state.debugMode
+    persistDebugMode(nextDebugMode)
+    return { debugMode: nextDebugMode, debugMoveRange: nextDebugMode }
+  }),
   setPlayerTile: (x, y) => set({ playerTile: { x, y } }),
   setVirtualInput: (direction, active) => {
     set((state) => ({
@@ -388,10 +426,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     })
   },
   markOakIntroSeen: () => set({ oakIntroSeen: true }),
-  resetGame: () => set(() => {
-    const freshParty = [createStarterMonster()]
-    return {
+  resetGame: () => {
+    persistDebugMode(false)
+    set(() => {
+      const freshParty = [createStarterMonster()]
+      return {
       sceneReady: true,
+      debugMode: false,
       debugMoveRange: false,
       playerTile: { x: 3, y: 2 },
       lastEncounter: null,
@@ -406,8 +447,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       virtualInput: initialVirtualInput,
       nearbyNpc: null,
       interactionNonce: 0,
-    }
-  }),
+      }
+    })
+  },
   saveGame: () => {
     const state = get()
     persistState(state)
@@ -419,11 +461,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       return
     }
 
+    persistDebugMode(saved.debugMode)
     set((state) => ({
       ...state,
       ...saved,
       battle: saved.battle,
-      debugMoveRange: saved.debugMoveRange,
+      debugMode: saved.debugMode,
       potions: saved.itemBag.potion,
       virtualInput: initialVirtualInput,
       nearbyNpc: null,

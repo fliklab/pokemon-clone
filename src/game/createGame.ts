@@ -14,6 +14,14 @@ type SceneWithLifecycle = Phaser.Scene & {
   create?: (...args: unknown[]) => unknown
 }
 
+function ensureSceneObject(scene: SceneWithLifecycle, label: string): SceneWithLifecycle {
+  const isValidScene = typeof scene === 'object' && scene !== null && typeof scene.scene?.key === 'string'
+  if (!isValidScene) {
+    throw new Error(`[game-init] ${label} is not a valid Phaser scene object`)
+  }
+  return scene
+}
+
 function toPayload(
   source: GameErrorPayload['source'],
   error: unknown,
@@ -71,8 +79,8 @@ export function createGame(
   onReady: () => void,
   onError: (payload: GameErrorPayload) => void,
 ) {
-  const overworldScene = new OverworldScene() as SceneWithLifecycle
-  const battleScene = new BattleScene() as SceneWithLifecycle
+  const overworldScene = ensureSceneObject(new OverworldScene() as SceneWithLifecycle, 'OverworldScene')
+  const battleScene = ensureSceneObject(new BattleScene() as SceneWithLifecycle, 'BattleScene')
 
   ;([overworldScene, battleScene] as SceneWithLifecycle[]).forEach((scene) => {
     wrapSceneLifecycle(scene, 'init', onError)

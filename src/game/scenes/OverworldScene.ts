@@ -1,6 +1,8 @@
 import Phaser from 'phaser'
 import { ko } from '../../i18n/ko'
 import { getGymTrainers, useGameStore } from '../../store/useGameStore'
+import mapJsonUrl from '../../assets/maps/overworld.json?url'
+import tilesetImageUrl from '../../assets/maps/overworld-tiles.png?url'
 
 const TILE_SIZE = 16
 const WORLD_SCALE = 2
@@ -69,8 +71,11 @@ const trainerVisionTiles: Record<string, string> = {
 
 const MAP_KEY = 'overworld-map'
 const TILESET_KEY = 'overworld-tiles'
-const MAP_URL = `${import.meta.env.BASE_URL}maps/overworld.json`
-const TILESET_URL = `${import.meta.env.BASE_URL}maps/overworld-tiles.png`
+const BASE_PATH = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`
+const MAP_URL = mapJsonUrl
+const TILESET_URL = tilesetImageUrl
+const MAP_FALLBACK_URL = `${BASE_PATH}maps/overworld.json`
+const TILESET_FALLBACK_URL = `${BASE_PATH}maps/overworld-tiles.png`
 
 export class OverworldScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
@@ -110,6 +115,28 @@ export class OverworldScene extends Phaser.Scene {
 
   preload() {
     try {
+      this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (file: Phaser.Loader.File) => {
+        if (file.key === TILESET_KEY) {
+          console.warn('[overworld] tileset image failed to load. Runtime fallback texture will be used.', {
+            key: file.key,
+            src: file.src,
+            primaryUrl: TILESET_URL,
+            fallbackUrl: TILESET_FALLBACK_URL,
+          })
+          return
+        }
+
+        if (file.key === MAP_KEY) {
+          console.warn('[overworld] map json failed to load from bundled URL. Retrying with base path fallback.', {
+            key: file.key,
+            src: file.src,
+            primaryUrl: MAP_URL,
+            fallbackUrl: MAP_FALLBACK_URL,
+          })
+          this.load.tilemapTiledJSON(MAP_KEY, MAP_FALLBACK_URL)
+        }
+      })
+
       this.load.tilemapTiledJSON(MAP_KEY, MAP_URL)
       this.load.image(TILESET_KEY, TILESET_URL)
     } catch (error) {
@@ -133,7 +160,7 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     if (!this.cache.tilemap.exists(MAP_KEY)) {
-      throw new Error(`[overworld] Failed to load tilemap JSON: ${MAP_URL}`)
+      throw new Error(`[overworld] Failed to load tilemap JSON: primary=${MAP_URL} fallback=${MAP_FALLBACK_URL}`)
     }
 
     const map = this.make.tilemap({ key: MAP_KEY })
@@ -775,3 +802,5 @@ export class OverworldScene extends Phaser.Scene {
     this.player.setTexture(`player-${this.lastFacingDirection}-${stepFrame}`)
   }
 }
+
+export default OverworldScene
