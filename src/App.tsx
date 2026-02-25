@@ -21,6 +21,7 @@ function App() {
   const potions = useGameStore((state) => state.potions)
   const setSceneReady = useGameStore((state) => state.setSceneReady)
   const chooseBattleCommand = useGameStore((state) => state.chooseBattleCommand)
+  const switchBattleMonster = useGameStore((state) => state.switchBattleMonster)
   const healPartyAtPc = useGameStore((state) => state.healPartyAtPc)
   const buyPotion = useGameStore((state) => state.buyPotion)
   const saveGame = useGameStore((state) => state.saveGame)
@@ -161,11 +162,20 @@ function App() {
             ))}
           </div>
           {selectedPartyMonster && (
-            <div className="rounded border border-slate-700 p-2 bg-slate-900/70">
+            <div className="rounded border border-slate-700 p-2 bg-slate-900/70 space-y-2">
               <p className="font-semibold">상세 정보</p>
               <p>타입: {selectedPartyMonster.type}</p>
               <p>공격 {selectedPartyMonster.attack} · 방어 {selectedPartyMonster.defense} · 스피드 {selectedPartyMonster.speed}</p>
               <p>EXP {selectedPartyMonster.exp}/{selectedPartyMonster.nextLevelExp}</p>
+              {battle.active && battle.phase === 'player_turn' && (
+                <button
+                  className="w-full rounded bg-violet-700 active:bg-violet-600 p-2 font-semibold disabled:opacity-50"
+                  onClick={() => switchBattleMonster(selectedPartyMonster.id)}
+                  disabled={selectedPartyMonster.id === battle.player.id || selectedPartyMonster.hp <= 0}
+                >
+                  이 포켓몬으로 교체
+                </button>
+              )}
             </div>
           )}
         </div>

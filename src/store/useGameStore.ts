@@ -49,6 +49,7 @@ type GameState = {
   triggerEncounter: (x: number, y: number) => void
   triggerTrainerBattle: (trainer: TrainerBattle) => void
   chooseBattleCommand: (command: BattleCommand) => void
+  switchBattleMonster: (monsterId: string) => void
   setVirtualInput: (direction: keyof DirectionalInput, active: boolean) => void
   setNearbyNpc: (target: NearbyNpc) => void
   requestNpcInteract: () => void
@@ -482,6 +483,35 @@ export const useGameStore = create<GameState>((set, get) => ({
         },
       })
     }
+  },
+  switchBattleMonster: (monsterId) => {
+    const state = get()
+    const { battle, party } = state
+    if (!battle.active || battle.phase !== 'player_turn') {
+      return
+    }
+
+    const nextMonster = party.find((monster) => monster.id === monsterId)
+    if (!nextMonster || nextMonster.hp <= 0 || nextMonster.id === battle.player.id) {
+      return
+    }
+
+    const reorderedParty = [nextMonster, ...party.filter((monster) => monster.id !== nextMonster.id)]
+
+    const switchedMessage = ko.store.switchedMonster(nextMonster.name)
+    const retaliation = calculateDamage(battle.enemy, nextMonster, 20)
+    const playerAfter = applyDamage(nextMonster, retaliation)
+
+    set({
+      party: [{ ...playerAfter }, ...reorderedParty.slice(1)],
+      battle: {
+        ...battle,
+        player: { ...playerAfter },
+        phase: playerAfter.hp <= 0 ? 'lost' : 'player_turn',
+        message: `${switchedMessage} ${ko.store.enemyAttack(battle.enemy.name, retaliation)}`,
+        turn: battle.turn + 1,
+      },
+    })
   },
   endBattle: () => set((state) => ({ battle: initialBattleState(state.party) })),
 }))

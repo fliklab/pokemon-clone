@@ -87,6 +87,7 @@ export const ko = {
     victory: (name: string, level: number, evolutionNote: string) => ` 승리! ${name} 레벨 ${level} 달성!${evolutionNote}`,
     evolved: (name: string) => ` ${name}(으)로 진화했다!`,
     enemyAttack: (enemyName: string, damage: number) => `${enemyName} 의 공격으로 ${damage} 데미지!`,
+    switchedMonster: (name: string) => `${name}(으)로 교체했다!`,
   },
   trainers: {
     juniorMia: '주니어 미아',

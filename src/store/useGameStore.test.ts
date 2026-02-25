@@ -92,4 +92,37 @@ describe('battle flow endings', () => {
     useGameStore.getState().endBattle()
     expect(useGameStore.getState().battle.active).toBe(false)
   })
+
+  it('switches to selected party monster during battle', () => {
+    useGameStore.setState((state) => {
+      const ally = {
+        ...state.party[0],
+        id: 'ally-2',
+        name: 'Aquava',
+        type: 'water' as const,
+        hp: 32,
+        maxHp: 32,
+        defense: 30,
+      }
+
+      return {
+        party: [state.party[0], ally],
+        battle: {
+          ...state.battle,
+          active: true,
+          phase: 'player_turn',
+          player: { ...state.party[0] },
+          enemy: { ...state.battle.enemy, attack: 1 },
+        },
+      }
+    })
+
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    useGameStore.getState().switchBattleMonster('ally-2')
+
+    const state = useGameStore.getState()
+    expect(state.battle.player.id).toBe('ally-2')
+    expect(state.party[0].id).toBe('ally-2')
+    expect(state.battle.turn).toBe(1)
+  })
 })
