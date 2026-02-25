@@ -167,7 +167,7 @@ export class OverworldScene extends Phaser.Scene {
     const tileX = Math.floor(this.player.x / (TILE_SIZE * WORLD_SCALE))
     const tileY = Math.floor(this.player.y / (TILE_SIZE * WORLD_SCALE))
     const grassTile = this.grassLayer?.getTileAt(tileX, tileY)
-    const inGrass = grassTile?.index === TILE_GRASS
+    const inGrass = Boolean(grassTile && grassTile.index !== -1)
 
     const state = useGameStore.getState()
 
@@ -349,7 +349,7 @@ export class OverworldScene extends Phaser.Scene {
     }
 
     const blockedTile = this.blockedLayer.getTileAt(tileX, tileY)
-    if (blockedTile && blockedTile.index !== -1 && blockedTile.index !== TILE_GROUND && blockedTile.index !== TILE_GRASS) {
+    if (blockedTile?.collides) {
       return false
     }
 
