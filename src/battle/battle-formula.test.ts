@@ -39,6 +39,17 @@ describe('battle formula', () => {
     expect(damage).toBeGreaterThan(0)
   })
 
+  it('applies random damage variance', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    const lowRoll = calculateDamage(attacker, defender)
+
+    vi.spyOn(Math, 'random').mockReturnValue(1)
+    const highRoll = calculateDamage(attacker, defender)
+
+    expect(highRoll).toBeGreaterThan(lowRoll)
+    vi.restoreAllMocks()
+  })
+
   it('increases catch chance with low hp', () => {
     const fullHp = calculateCatchChance(defender)
     const lowHp = calculateCatchChance({ ...defender, hp: 3 })

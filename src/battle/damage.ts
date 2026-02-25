@@ -23,7 +23,7 @@ export function calculateDamage(attacker: Battler, defender: Battler, power = 24
   const base = (((2 * attacker.level) / 5 + 2) * power * (attacker.attack / Math.max(1, defender.defense))) / 50 + 2
   const typeMod = getTypeMultiplier(attacker.type, defender.type)
   const statusMod = getStatusMultiplier(attacker.status)
-  const randomFactor = 0.9 + Math.random() * 0.1
+  const randomFactor = 0.85 + Math.random() * 0.15
 
   return Math.max(1, Math.floor(base * typeMod * statusMod * randomFactor))
 }
