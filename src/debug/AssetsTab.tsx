@@ -4,6 +4,7 @@ import { debugAssetManifest } from './assetManifest'
 export function AssetsTab() {
   const [query, setQuery] = useState('')
   const [zoom, setZoom] = useState(2)
+  const [failedById, setFailedById] = useState<Record<string, boolean>>({})
 
   const assets = useMemo(() => {
     const keyword = query.trim().toLowerCase()
@@ -45,12 +46,22 @@ export function AssetsTab() {
             <p className="text-sm font-semibold">{asset.label}</p>
             <p className="text-xs text-slate-400">{asset.group}</p>
             <div className="overflow-auto rounded border border-slate-700 bg-slate-950 p-2">
-              <img
-                src={asset.src}
-                alt={asset.label}
-                className="origin-top-left pixelated"
-                style={{ imageRendering: 'pixelated', transform: `scale(${zoom})` }}
-              />
+              {failedById[asset.id] ? (
+                <div className="flex min-h-20 items-center justify-center text-xs text-rose-300">
+                  이미지 로드 실패
+                </div>
+              ) : (
+                <img
+                  src={asset.src}
+                  alt={asset.label}
+                  className="origin-top-left pixelated"
+                  style={{ imageRendering: 'pixelated', transform: `scale(${zoom})` }}
+                  onError={() => {
+                    console.error('[assets-tab] failed to load image', { id: asset.id, src: asset.src })
+                    setFailedById((prev) => ({ ...prev, [asset.id]: true }))
+                  }}
+                />
+              )}
             </div>
             <p className="text-[11px] text-slate-500 break-all">{asset.src}</p>
           </article>

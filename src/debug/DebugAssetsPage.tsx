@@ -42,8 +42,9 @@ export default function DebugAssetsPage() {
           if (cancelled) return
           setStatusById((prev) => ({ ...prev, [asset.id]: 'ok' }))
         })
-        .catch(() => {
+        .catch((error) => {
           if (cancelled) return
+          console.error('[debug-assets] asset preload failed', { id: asset.id, src: asset.src, error })
           setStatusById((prev) => ({ ...prev, [asset.id]: 'error' }))
         })
     })
@@ -58,7 +59,7 @@ export default function DebugAssetsPage() {
           throw new Error(`map json load failed: ${response.status}`)
         }
 
-        const map = await response.json() as {
+        const map = (await response.json()) as {
           width: number
           height: number
           layers?: Array<{ name?: string }>
@@ -78,6 +79,7 @@ export default function DebugAssetsPage() {
         }
       } catch (error) {
         if (!cancelled) {
+          console.error('[debug-assets] map probe failed', error)
           setMapProbe((prev) => ({
             ...prev,
             error: error instanceof Error ? error.message : String(error),
@@ -129,12 +131,26 @@ export default function DebugAssetsPage() {
                 <article key={asset.id} className="rounded border border-slate-700 bg-slate-900/70 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-medium text-sm">{asset.label}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded ${status === 'ok' ? 'bg-emerald-800 text-emerald-100' : status === 'error' ? 'bg-rose-800 text-rose-100' : 'bg-slate-700 text-slate-200'}`}>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${status === 'ok' ? 'bg-emerald-800 text-emerald-100' : status === 'error' ? 'bg-rose-800 text-rose-100' : 'bg-slate-700 text-slate-200'}`}
+                    >
                       {status.toUpperCase()}
                     </span>
                   </div>
                   <div className="h-28 rounded bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-700">
-                    <img src={asset.src} alt={asset.label} className="max-h-full max-w-full object-contain pixelated" />
+                    {status === 'error' ? (
+                      <p className="text-xs text-rose-300">이미지 없음 (fallback)</p>
+                    ) : (
+                      <img
+                        src={asset.src}
+                        alt={asset.label}
+                        className="max-h-full max-w-full object-contain pixelated"
+                        onError={() => {
+                          console.error('[debug-assets] image tag failed', { id: asset.id, src: asset.src })
+                          setStatusById((prev) => ({ ...prev, [asset.id]: 'error' }))
+                        }}
+                      />
+                    )}
                   </div>
                   <p className="text-xs text-slate-400 break-all">{asset.src}</p>
                   {asset.note && <p className="text-xs text-slate-300">{asset.note}</p>}
